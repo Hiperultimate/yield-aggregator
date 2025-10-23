@@ -4,6 +4,6 @@ use anchor_lang::prelude::*;
 pub struct Initialize {}
 
 pub fn handler(ctx: Context<Initialize>) -> Result<()> {
-    msg!("Greetings from: {:?}", ctx.program_id);
+    msg!("Yield aggregator initializated: {:?}", ctx.program_id);
     Ok(())
 }
