@@ -2,6 +2,7 @@ use anchor_lang::prelude::*;
 
 // User specific
 #[account]
+#[derive(InitSpace)]
 pub struct UserPosition {
     /// The vault this position belongs to
     pub vault: Pubkey,
