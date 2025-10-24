@@ -47,7 +47,7 @@ pub struct InitializeVault<'info> {
 
 impl<'info> InitializeVault<'info> {
     pub fn initialize_vault(&mut self, vault_bump: u8, allocation_config_bump: u8, jup_allocation : u16, kamino_allocation: u16) -> Result<()>{
-        require!(jup_allocation + kamino_allocation == 10_000, ErrorCode::InvalidAllocation);
+        require!(jup_allocation + kamino_allocation == 10_000, ErrorCode::InvalidAllocation);   // 10_000 = 100.00%
         let current_time = Clock::get().unwrap().unix_timestamp;
 
         // vault states

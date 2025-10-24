@@ -2,6 +2,7 @@ pub mod constants;
 pub mod error;
 pub mod instructions;
 pub mod state;
+// pub mod jup_lend_interface;
 
 use anchor_lang::prelude::*;
 
@@ -10,6 +11,9 @@ pub use instructions::*;
 pub use state::*;
 
 declare_id!("HCiHNgC88wQPNdUf6NfqC9ByXYQdFMQ8dW4BzMBHb39W");
+declare_program!(jup_lend);
+
+pub use jup_lend::*;
 
 #[program]
 pub mod yield_aggregator {
