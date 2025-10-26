@@ -202,10 +202,10 @@ impl<'info> Deposit<'info> {
         // Current price held in jup
         let vault_f_token_balance = self.vault_f_token_ata.amount; 
         let token_exchange_price = self.lending.token_exchange_price;   // it could be that lending is not initialized yet if this is the first deposit, need to check
-        let jup_usdt_value = vault_f_token_balance.mul(token_exchange_price).div(10_u64.pow(self.usdc_mint.decimals as u32) );
+        let jup_usdc_value = vault_f_token_balance.mul(token_exchange_price).div(10_u64.pow(self.usdc_mint.decimals as u32) );
 
         // Current price held in kamino
-        let kamino_usdt_value: u64 = 0;  // dummy value for now
+        let kamino_usdc_value: u64 = 0;  // dummy value for now
 
         match config_mode {
             AllocationMode::Static => {
@@ -213,8 +213,8 @@ impl<'info> Deposit<'info> {
 
                 // calculate the spread, how much amount needs to go in Jup and kamino 
                 // but allocation can change overtime, so users money will not be spread evenly
-                let a_j = jup_usdt_value; // current price in Jup 
-                let a_k = kamino_usdt_value; // current price in Kamino
+                let a_j = jup_usdc_value; // current price in Jup 
+                let a_k = kamino_usdc_value; // current price in Kamino
                 let t = a_j + a_k;  // total price invested
 
                 let r_j = self.vault_allocation_config.jup_allocation as u64; // jup ratio
