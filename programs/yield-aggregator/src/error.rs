@@ -4,4 +4,7 @@ use anchor_lang::prelude::*;
 pub enum ErrorCode {
     #[msg("Invalid allocation ratio provided.")]
     InvalidAllocation,
+
+    #[msg("CPI_TO_LENDING_PROGRAM_FAILED")]
+    CpiToLendingProgramFailed,
 }

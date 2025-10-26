@@ -39,6 +39,23 @@ pub struct InitializeVault<'info> {
         bump
     )]
     pub vault: Account<'info, Vault>,   // Global vault
+
+    // Jup f_token_account init
+    #[account(
+        init,
+        payer = admin,
+        associated_token::mint = jup_f_token_mint,
+        associated_token::authority = vault,
+        associated_token::token_program = token_program
+    )]
+    pub vault_f_token_ata: InterfaceAccount<'info, TokenAccount>,
+
+    #[account(
+        mint::token_program=token_program
+    )]
+    pub jup_f_token_mint : InterfaceAccount<'info, Mint>,
+    
+
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,
     pub associated_token_program: Program<'info, AssociatedToken>
