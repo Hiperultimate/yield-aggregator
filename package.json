@@ -6,7 +6,10 @@
   },
   "dependencies": {
     "@coral-xyz/anchor": "^0.31.1",
-    "@solana/spl-token": "^0.4.14"
+    "@jup-ag/api": "^6.0.45",
+    "@jup-ag/lend": "^0.0.102",
+    "@solana/spl-token": "^0.4.14",
+    "axios": "^1.13.0"
   },
   "devDependencies": {
     "@types/bn.js": "^5.1.0",

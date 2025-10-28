@@ -10,7 +10,7 @@ pub use constants::*;
 pub use instructions::*;
 pub use state::*;
 
-declare_id!("HCiHNgC88wQPNdUf6NfqC9ByXYQdFMQ8dW4BzMBHb39W");
+declare_id!("CwiRUg9u7uqDQDocq2QdceatJ5Mr8dg8Le5DMx6UtDZA");
 declare_program!(jup_lend);
 
 pub use jup_lend::{cpi as jup_cpi, cpi::accounts as jup_accounts, program::Lending as JupLendingProgram};
