@@ -34,18 +34,20 @@ pub struct Deposit<'info> {
     pub user_usdc_ata : InterfaceAccount<'info, TokenAccount>,
 
     #[account(
+        mut,
         seeds = [b"vault", admin.key().as_ref()],
-        bump=main_vault.bump
+        bump
     )]
     pub main_vault: Account<'info, Vault>,   // Global vault
 
     #[account(
         seeds=[b"allocation_config", admin.key().as_ref() ],
-        bump=vault_allocation_config.bump
+        bump
     )]
     pub vault_allocation_config : Account<'info, AllocationConfig>,
 
     #[account(
+        mut,
         constraint = main_vault.vault_usdc_ata.key() == vault_usdc_ata.key(),
         associated_token::mint=usdc_mint,
         associated_token::authority=main_vault,
@@ -67,6 +69,7 @@ pub struct Deposit<'info> {
     // TODO : Isolating structures were giving errors, find a better way to better clean this up in a neat struct later
     // Jup related accounts
     #[account(
+        mut,
         associated_token::mint = f_token_mint,
         associated_token::authority = main_vault,
         associated_token::token_program = token_program
@@ -74,26 +77,39 @@ pub struct Deposit<'info> {
     pub vault_f_token_ata: InterfaceAccount<'info, TokenAccount>,
 
     #[account(
+        mut,
         mint::token_program=token_program
     )]
-    pub f_token_mint : InterfaceAccount<'info, Mint>,   
+    pub f_token_mint : InterfaceAccount<'info, Mint>,
 
     // Protocol accounts
     /// CHECK: Validated by lending program
     pub lending_admin: AccountInfo<'info>,
-    pub lending: Account<'info, JupLending>,
+    /// CHECK: Validated by lending program
+    #[account(mut)]
+    pub lending: AccountInfo<'info>,
 
     // Liquidity protocol accounts
+
+    #[account(mut)]
     /// CHECK: Validated by lending program
     pub supply_token_reserves_liquidity: AccountInfo<'info>,
+
+    #[account(mut)]
     /// CHECK: Validated by lending program
     pub lending_supply_position_on_liquidity: AccountInfo<'info>,
     /// CHECK: Validated by lending program
     pub rate_model: AccountInfo<'info>,
+
+    #[account(mut)]
     /// CHECK: Validated by lending program
     pub vault: AccountInfo<'info>,
+
+    #[account(mut)]
     /// CHECK: Validated by lending program
     pub liquidity: AccountInfo<'info>,
+
+    #[account(mut)]
     /// CHECK: Validated by lending program
     pub liquidity_program: AccountInfo<'info>,
 
@@ -103,7 +119,8 @@ pub struct Deposit<'info> {
 
     // Target lending program
     pub jup_lending_program : Program<'info, JupLendingProgram>,
-
+    /// CHECK: Validated by lending program
+    // pub jup_lending_program: UncheckedAccount<'info>,
 
 
     pub system_program: Program<'info, System>,
@@ -157,7 +174,7 @@ impl<'info> Deposit<'info> {
 
     pub fn jup_deposit(&mut self, deposited_amount : u64) -> Result<()> {
         let jup_cpi_accounts = jup_accounts::Deposit{
-            signer : self.vault.to_account_info(),
+            signer : self.main_vault.to_account_info(),
             depositor_token_account: self.vault_usdc_ata.to_account_info(),
             recipient_token_account: self.vault_f_token_ata.to_account_info(),
             mint: self.usdc_mint.to_account_info(),
@@ -196,12 +213,13 @@ impl<'info> Deposit<'info> {
     pub fn allocate_funds(&mut self, deposited_amount : u64) -> Result<()>{
         // Check the mode
         let config_mode = self.vault_allocation_config.mode.clone();
-        
+
         // fetch current price of the spent USDC
 
         // Current price held in jup
-        let vault_f_token_balance = self.vault_f_token_ata.amount; 
-        let token_exchange_price = self.lending.token_exchange_price;   // it could be that lending is not initialized yet if this is the first deposit, need to check
+        let vault_f_token_balance = self.vault_f_token_ata.amount;
+        let lending_data = JupLending::try_deserialize(&mut &self.lending.data.borrow()[..])?;
+        let token_exchange_price = lending_data.token_exchange_price;   // it could be that lending is not initialized yet if this is the first deposit, need to check
         let jup_usdc_value = vault_f_token_balance.mul(token_exchange_price).div(10_u64.pow(self.usdc_mint.decimals as u32) );
 
         // Current price held in kamino
@@ -211,9 +229,9 @@ impl<'info> Deposit<'info> {
             AllocationMode::Static => {
                 // manual balancing
 
-                // calculate the spread, how much amount needs to go in Jup and kamino 
+                // calculate the spread, how much amount needs to go in Jup and kamino
                 // but allocation can change overtime, so users money will not be spread evenly
-                let a_j = jup_usdc_value; // current price in Jup 
+                let a_j = jup_usdc_value; // current price in Jup
                 let a_k = kamino_usdc_value; // current price in Kamino
                 let t = a_j + a_k;  // total price invested
 
@@ -222,7 +240,7 @@ impl<'info> Deposit<'info> {
                 let d = deposited_amount;   // new deposit amount
 
                 let t_n = t + d;    // new total
-                let a_nj = r_j.mul(t_n);    
+                let a_nj = r_j.mul(t_n);
                 let a_nk = r_k.mul(t_n);
                 let mut addj = a_nj - a_j;
                 let mut addk = a_nk - a_k;
@@ -248,7 +266,7 @@ impl<'info> Deposit<'info> {
                 }
 
                 // Write logic to transfer addj to jup
-                self.jup_deposit(addj)?;
+                self.jup_deposit(addj)?
                 
                 // Write logic to transfer addk to kamino
             },
@@ -263,8 +281,11 @@ impl<'info> Deposit<'info> {
 
 pub fn handler(ctx : Context<Deposit>, deposited_amount : u64) -> Result<()>{
     // TODO: Perform proper error handling later using match
+    msg!("It's starting ::::::");
     ctx.accounts.initialize_user_position(deposited_amount, ctx.bumps.user_position)?;
     ctx.accounts.update_vault_state(deposited_amount)?;
+
+    msg!("Starting to deposit ::::::");
     ctx.accounts.desposit_to_vault_ata(deposited_amount)?;
     ctx.accounts.allocate_funds(deposited_amount)?;
     Ok(())

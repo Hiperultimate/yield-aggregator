@@ -10,19 +10,27 @@ import {
   getMint,
   getAssociatedTokenAddressSync,
   getAccount,
+  Mint,
 } from "@solana/spl-token";
 import { airdropTo, confirmTx, setUSDCViaCheatcode } from "./helper-fns";
 import { assert, expect } from "chai";
 import axios from "axios";
-
+import { getDepositContext } from "@jup-ag/lend/earn";
 
 const USDC_MINT_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 const JUP_LEND_ADDRESS = "jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9"; // Mainnet
 
 describe("yield-aggregator", () => {
   // Configure the client to use the local cluster.
-  const connection = new anchor.web3.Connection("http://localhost:8899", "confirmed");
-  const provider = new anchor.AnchorProvider(connection, anchor.Wallet.local(), {commitment :"confirmed"});
+  const connection = new anchor.web3.Connection(
+    "http://localhost:8899",
+    "confirmed"
+  );
+  const provider = new anchor.AnchorProvider(
+    connection,
+    anchor.Wallet.local(),
+    { commitment: "confirmed" }
+  );
   anchor.setProvider(provider);
 
   const program = anchor.workspace.yieldAggregator as Program<YieldAggregator>;
@@ -33,6 +41,7 @@ describe("yield-aggregator", () => {
 
   let admin: anchor.web3.Keypair;
   let usdcMint: anchor.web3.PublicKey;
+  let usdcMintDetails: Mint;
   let jupFTokenMint: anchor.web3.PublicKey;
   let vaultPda: anchor.web3.PublicKey;
   let allocationConfigPda: anchor.web3.PublicKey;
@@ -50,13 +59,16 @@ describe("yield-aggregator", () => {
     );
     await confirmTx(airdropAdminTx, provider.connection);
 
-    const usdcMintInfo = await getMint(provider.connection, new anchor.web3.PublicKey(USDC_MINT_ADDRESS));
-    usdcMint = usdcMintInfo.address;
-    console.log("USDC Supply : ", usdcMintInfo.supply);
+    usdcMintDetails = await getMint(
+      provider.connection,
+      new anchor.web3.PublicKey(USDC_MINT_ADDRESS)
+    );
+    usdcMint = usdcMintDetails.address;
+    console.log("USDC Supply : ", usdcMintDetails.supply);
 
     // Check how much USDC does provider.wallet has
     // const mainWallet = provider.wallet;
-    // await setUSDCViaCheatcode(mainWallet.publicKey.toBase58(), 500, usdcMintInfo);
+    // await setUSDCViaCheatcode(mainWallet.publicKey.toBase58(), 500, usdcMintDetails);
     // const mainWalletUSDCAta = getAssociatedTokenAddressSync(usdcMint, mainWallet.publicKey, false);
     // const maintWalletUSDCAtaDetails = await getAccount(provider.connection, mainWalletUSDCAta, "confirmed");
 
@@ -67,12 +79,16 @@ describe("yield-aggregator", () => {
     const { getDepositContext } = await import("@jup-ag/lend/earn");
 
     const depositContext = await getDepositContext({
-        asset: usdcMint, // asset mint address
-        signer: admin.publicKey, // signer public key
-        connection,
+      asset: usdcMint, // asset mint address
+      signer: admin.publicKey, // signer public key
+      connection,
     });
     jupFTokenMint = depositContext.fTokenMint; // Static : 9BEcn9aPEmhSPbPQeFGjidRiEKki46fVQDyPpSQXPA2D
-    const jupFTokenDetails = await getMint(connection, jupFTokenMint, "confirmed");
+    const jupFTokenDetails = await getMint(
+      connection,
+      jupFTokenMint,
+      "confirmed"
+    );
     console.log("jupFToken supply :", jupFTokenDetails.supply);
 
     [vaultPda] = anchor.web3.PublicKey.findProgramAddressSync(
@@ -125,10 +141,24 @@ describe("yield-aggregator", () => {
 
     // Mint 1000 USDC (1_000_000_000 units) to user
     const userUSDTAmount = 1000;
-    await setUSDCViaCheatcode(user.publicKey.toBase58(), userUSDTAmount, usdcMintInfo);
-    const userUSDTAta = getAssociatedTokenAddressSync(usdcMint, user.publicKey, false);
-    const userUSDTAtaDetails = await getAccount(provider.connection, userUSDTAta, "confirmed");
-    expect(userUSDTAtaDetails.amount).eq(BigInt(userUSDTAmount * (10**usdcMintInfo.decimals)));
+    await setUSDCViaCheatcode(
+      user.publicKey.toBase58(),
+      userUSDTAmount,
+      usdcMintDetails
+    );
+    const userUSDTAta = getAssociatedTokenAddressSync(
+      usdcMint,
+      user.publicKey,
+      false
+    );
+    const userUSDTAtaDetails = await getAccount(
+      provider.connection,
+      userUSDTAta,
+      "confirmed"
+    );
+    expect(userUSDTAtaDetails.amount).eq(
+      BigInt(userUSDTAmount * 10 ** usdcMintDetails.decimals)
+    );
   });
 
   it("Program initialized!", async () => {
@@ -180,5 +210,75 @@ describe("yield-aggregator", () => {
     );
   });
 
-  it("User deposits USDC to vault", async () => {});
+  it("User deposits USDC to vault", async () => {
+    // Transfer 100 USDC from user
+    const usdcDepositAmount = 100;
+    const usdcAmountWithDecimals = new anchor.BN(usdcDepositAmount).mul(
+      new anchor.BN(10).pow(new anchor.BN(usdcMintDetails.decimals))
+    );
+
+    const { getDepositContext } = await import("@jup-ag/lend/earn");
+
+    const jupDepositContext = await getDepositContext({
+      asset: usdcMint,
+      connection: provider.connection,
+      signer: user.publicKey,
+    });
+
+    // const depositTx = await program.methods.deposit(usdcAmountWithDecimals)
+    //   .accounts({
+    //     user: user.publicKey,
+    //     admin : admin.publicKey,
+    //     usdcMint: usdcMint,
+
+    //     fTokenMint : jupDepositContext.fTokenMint,
+    //     lendingAdmin: jupDepositContext.lendingAdmin,
+    //     lending: jupDepositContext.lending,
+    //     supplyTokenReservesLiquidity : jupDepositContext.supplyTokenReservesLiquidity,
+    //     lendingSupplyPositionOnLiquidity: jupDepositContext.lendingSupplyPositionOnLiquidity,
+    //     rateModel: jupDepositContext.rateModel,
+    //     vault: jupDepositContext.vault,
+    //     liquidity: jupDepositContext.liquidity,
+    //     liquidityProgram: jupDepositContext.liquidityProgram,
+    //     rewardsRateModel: jupDepositContext.rewardsRateModel,
+    //     tokenProgram: TOKEN_PROGRAM_ID,
+    //   })
+    //   .signers([user])
+    //   .rpc();
+
+    const depositTx = await program.methods
+      .deposit(usdcAmountWithDecimals)
+      .accounts({
+        user: user.publicKey,
+        admin: admin.publicKey,
+        usdcMint: usdcMint,
+
+        fTokenMint: jupDepositContext.fTokenMint,
+        lendingAdmin: jupDepositContext.lendingAdmin,
+        lending: jupDepositContext.lending,
+        supplyTokenReservesLiquidity:
+          jupDepositContext.supplyTokenReservesLiquidity,
+        lendingSupplyPositionOnLiquidity:
+          jupDepositContext.lendingSupplyPositionOnLiquidity,
+        rateModel: jupDepositContext.rateModel,
+        vault: jupDepositContext.vault,
+        liquidity: jupDepositContext.liquidity,
+        liquidityProgram: jupDepositContext.liquidityProgram,
+        rewardsRateModel: jupDepositContext.rewardsRateModel,
+        tokenProgram: TOKEN_PROGRAM_ID,
+        // jupLendingProgram: new anchor.web3.PublicKey(JUP_LEND_ADDRESS),
+      })
+      .signers([user])
+      .transaction();
+
+    // const sim = await connection.simulateTransaction(depositTx);
+    try {
+      const sim = await provider.simulate(depositTx, [user]);
+      console.log("Success LOGS:", sim.logs);
+    } catch (error) {
+      console.log("ERROR LOGS : ", error);
+    }
+
+    // console.log("Jup deposited complete ?! : ", depositTx);
+  });
 });
