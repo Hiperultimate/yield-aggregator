@@ -264,14 +264,22 @@ describe("yield-aggregator", () => {
     }
 
     // Check user USDT balance here
-    let userUSDTDetails = await getAccount(provider.connection, userUsdcAta, "confirmed");
-    console.log("User USDT ATA address : ", userUSDTDetails.address.toBase58());
-    console.log("Checking current user ATA USDC balance :", userUSDTDetails.amount);
+    let mainVaultUSDCAta = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+    console.log("User USDT ATA address : ", mainVaultUSDCAta.address.toBase58());
+    console.log("Checking current user ATA USDC balance :", mainVaultUSDCAta.amount);
 
     const depositTx = await program.methods
       .depositJup(usdcAmountWithDecimals)
       .accounts({
-        depositorTokenAccount: jupDepositContext.depositorTokenAccount,
+        admin: admin.publicKey,
+        
+        // THESE FIELDS ARE DIFFERENT -> signer, depositorTokenAccount, recipientTokenAccount
+        signer: jupDepositContext.signer, // should be the user who is depositing token
+        depositorTokenAccount: jupDepositContext.depositorTokenAccount,  // should be the user usdc ATA
+        // recipientTokenAccount: jupDepositContext.recipientTokenAccount, // should be vault f token vault
+        // signerTokenAccount: jupDepositContext.recipientTokenAccount,
+        mint: jupDepositContext.mint,
+        
         fTokenMint: jupDepositContext.fTokenMint,
         lending: jupDepositContext.lending,
         lendingAdmin: jupDepositContext.lendingAdmin,
@@ -280,11 +288,8 @@ describe("yield-aggregator", () => {
         liquidity: jupDepositContext.liquidity,
         lendingProgram: new anchor.web3.PublicKey(JUP_LEND_ADDRESS),
         liquidityProgram: jupDepositContext.liquidityProgram,
-        mint: jupDepositContext.mint,
         rateModel: jupDepositContext.rateModel,
-        recipientTokenAccount: jupDepositContext.recipientTokenAccount,
         rewardsRateModel: jupDepositContext.rewardsRateModel,
-        signer: jupDepositContext.signer,
         supplyTokenReservesLiquidity:
           jupDepositContext.supplyTokenReservesLiquidity,
         vault: jupDepositContext.vault,
@@ -294,14 +299,14 @@ describe("yield-aggregator", () => {
 
     console.log("Jup tx check : ", depositTx);
 
-    userUSDTDetails = await getAccount(provider.connection, userUsdcAta, "confirmed");
-    console.log("User USDT ATA address : ", userUSDTDetails.address.toBase58());
-    console.log("Checking current user ATA USDC balance later :", userUSDTDetails.amount);
+    mainVaultUSDCAta = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+    console.log("User USDT ATA address : ", mainVaultUSDCAta.address.toBase58());
+    console.log("Checking current user ATA USDC balance :", mainVaultUSDCAta.amount);
 
-    // check how much ftoken do user have
-    const userFTokenDetails = await getAccount(provider.connection, jupDepositContext.recipientTokenAccount, "confirmed");
-    console.log("User F token ATA address : ", userFTokenDetails.address.toBase58());
-    console.log("Checking user FToken balance : ", userFTokenDetails.amount);
+    // check how much ftoken do main_vault have
+    const vaultFTokenDetails = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
+    console.log("Vault F token ATA address : ", vaultFTokenDetails.address.toBase58());
+    console.log("Checking vault FToken balance : ", vaultFTokenDetails.amount);
   });
 
   // it("User deposits USDC to vault", async () => {
