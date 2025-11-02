@@ -26,4 +26,15 @@ pub mod yield_aggregator {
     pub fn initialize_vault(ctx: Context<InitializeVault>, jup_allocation: u16, kamino_allocation: u16) -> Result<()> {
         initialize_vault::handler(ctx, jup_allocation, kamino_allocation)
     }
+
+    pub fn deposit(ctx: Context<Deposit>, deposited_amount: u64) -> Result<()> { 
+        msg!("Running deposit handler ::::::");
+        deposit::handler(ctx, deposited_amount)
+    }
+
+    pub fn deposit_jup(ctx : Context<DepositJup>, amount : u64) -> Result<()>{
+        msg!("Running jup handler");
+        deposit_jup::handler(ctx, amount)
+        // Ok(())
+    }
 }
