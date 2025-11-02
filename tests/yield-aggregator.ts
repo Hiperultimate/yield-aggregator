@@ -210,22 +210,120 @@ describe("yield-aggregator", () => {
     );
   });
 
-  it("Checking if default jup call is working or not", async () => {
-    const { getDepositContext } = await import("@jup-ag/lend/earn");
+  // it("Deposit Jup Instruction call", async () => {
+  //   const { getDepositContext } = await import("@jup-ag/lend/earn");
 
-    const jupDepositContext = await getDepositContext({
-      asset: usdcMint,
-      connection: provider.connection,
-      signer: user.publicKey,
-    });
+  //   const jupDepositContext = await getDepositContext({
+  //     asset: usdcMint,
+  //     connection: provider.connection,
+  //     signer: user.publicKey,
+  //   });
 
+  //   const usdcDepositAmount = 100;
+  //   const usdcAmountWithDecimals = new anchor.BN(usdcDepositAmount).mul(
+  //     new anchor.BN(10).pow(new anchor.BN(usdcMintDetails.decimals))
+  //   );
+
+  //   console.log("Signer details : ", user.publicKey.toString());
+  //   console.log("Jup Signer details : ", jupDepositContext.signer.toString());
+
+  //   const accountsToCheck = [
+  //     jupDepositContext.depositorTokenAccount,
+  //     jupDepositContext.fTokenMint,
+  //     jupDepositContext.lending,
+  //     jupDepositContext.lendingAdmin,
+  //     jupDepositContext.lendingBorrowPositionOnLiquidity,
+  //     jupDepositContext.liquidity,
+  //     new anchor.web3.PublicKey(JUP_LEND_ADDRESS),
+  //     jupDepositContext.liquidityProgram,
+  //     jupDepositContext.mint,
+  //     jupDepositContext.rateModel,
+  //     jupDepositContext.recipientTokenAccount,
+  //     jupDepositContext.rewardsRateModel,
+  //     jupDepositContext.signer,
+  //     jupDepositContext.supplyTokenReservesLiquidity,
+  //     jupDepositContext.systemProgram,
+  //     jupDepositContext.tokenProgram,
+  //     jupDepositContext.vault,
+  //     ASSOCIATED_TOKEN_PROGRAM_ID,
+  //   ];
+
+  //   for (const account of accountsToCheck) {
+  //     try {
+  //       const info = await connection.getAccountInfo(account);
+  //       if (!info) {
+  //         console.log(`Account ${account.toString()} does not exist`);
+  //       } else {
+  //         console.log(`Account ${account.toString()} exists`);
+  //       }
+  //     } catch (error) {
+  //       console.log(
+  //         `Error checking account ${account.toString()}: ${error.message}`
+  //       );
+  //     }
+  //   }
+
+  //   // Check user USDT balance here
+  //   let mainVaultUSDCAta = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+  //   console.log("User USDT ATA address : ", mainVaultUSDCAta.address.toBase58());
+  //   console.log("Checking current user ATA USDC balance :", mainVaultUSDCAta.amount);
+
+  //   const depositTx = await program.methods
+  //     .depositJup(usdcAmountWithDecimals)
+  //     .accounts({
+  //       admin: admin.publicKey,
+        
+  //       // THESE FIELDS ARE DIFFERENT -> signer, depositorTokenAccount, recipientTokenAccount
+  //       signer: jupDepositContext.signer, // should be the user who is depositing token
+  //       depositorTokenAccount: jupDepositContext.depositorTokenAccount,  // should be the user usdc ATA
+  //       // recipientTokenAccount: jupDepositContext.recipientTokenAccount, // should be vault f token vault
+  //       // signerTokenAccount: jupDepositContext.recipientTokenAccount,
+  //       mint: jupDepositContext.mint,
+        
+  //       fTokenMint: jupDepositContext.fTokenMint,
+  //       lending: jupDepositContext.lending,
+  //       lendingAdmin: jupDepositContext.lendingAdmin,
+  //       lendingSupplyPositionOnLiquidity:
+  //         jupDepositContext.lendingSupplyPositionOnLiquidity,
+  //       liquidity: jupDepositContext.liquidity,
+  //       liquidityProgram: jupDepositContext.liquidityProgram,
+  //       rateModel: jupDepositContext.rateModel,
+  //       rewardsRateModel: jupDepositContext.rewardsRateModel,
+  //       supplyTokenReservesLiquidity:
+  //         jupDepositContext.supplyTokenReservesLiquidity,
+  //       vault: jupDepositContext.vault,
+  //     })
+  //     .signers([user])
+  //     .rpc({ skipPreflight: true });
+
+  //   console.log("Jup tx check : ", depositTx);
+
+  //   mainVaultUSDCAta = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+  //   console.log("User USDT ATA address : ", mainVaultUSDCAta.address.toBase58());
+  //   console.log("Checking current user ATA USDC balance :", mainVaultUSDCAta.amount);
+
+  //   // check how much ftoken do main_vault have
+  //   const vaultFTokenDetails = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
+  //   console.log("Vault F token ATA address : ", vaultFTokenDetails.address.toBase58());
+  //   console.log("Checking vault FToken balance : ", vaultFTokenDetails.amount);
+  // });
+
+  it("User deposits USDC to vault", async () => {
+    // Transfer 100 USDC from user
     const usdcDepositAmount = 100;
     const usdcAmountWithDecimals = new anchor.BN(usdcDepositAmount).mul(
       new anchor.BN(10).pow(new anchor.BN(usdcMintDetails.decimals))
     );
 
-    console.log("Signer details : ", user.publicKey.toString());
-    console.log("Jup Signer details : ", jupDepositContext.signer.toString());
+    const { getDepositContext } = await import("@jup-ag/lend/earn");
+
+    // const checking = getAssociatedTokenAddressSync(usdcMint, vaultPda);
+    const jupDepositContext = await getDepositContext({
+      asset: usdcMint,
+      connection: provider.connection,
+      signer: user.publicKey, // TODO : change this to main_vault
+      // signer: vaultPda, // TODO : change this to main_vault
+    });
 
     const accountsToCheck = [
       jupDepositContext.depositorTokenAccount,
@@ -268,116 +366,58 @@ describe("yield-aggregator", () => {
     console.log("User USDT ATA address : ", mainVaultUSDCAta.address.toBase58());
     console.log("Checking current user ATA USDC balance :", mainVaultUSDCAta.amount);
 
-    const depositTx = await program.methods
-      .depositJup(usdcAmountWithDecimals)
+    const depositTx = await program.methods.deposit(usdcAmountWithDecimals)
       .accounts({
-        admin: admin.publicKey,
+        admin : admin.publicKey,
+
+        user: user.publicKey,
         
-        // THESE FIELDS ARE DIFFERENT -> signer, depositorTokenAccount, recipientTokenAccount
-        signer: jupDepositContext.signer, // should be the user who is depositing token
-        depositorTokenAccount: jupDepositContext.depositorTokenAccount,  // should be the user usdc ATA
-        // recipientTokenAccount: jupDepositContext.recipientTokenAccount, // should be vault f token vault
-        // signerTokenAccount: jupDepositContext.recipientTokenAccount,
-        mint: jupDepositContext.mint,
-        
-        fTokenMint: jupDepositContext.fTokenMint,
+        usdcMint: usdcMint,
+        fTokenMint : jupDepositContext.fTokenMint,
         lending: jupDepositContext.lending,
         lendingAdmin: jupDepositContext.lendingAdmin,
-        lendingSupplyPositionOnLiquidity:
-          jupDepositContext.lendingSupplyPositionOnLiquidity,
+        lendingSupplyPositionOnLiquidity: jupDepositContext.lendingSupplyPositionOnLiquidity,
         liquidity: jupDepositContext.liquidity,
-        lendingProgram: new anchor.web3.PublicKey(JUP_LEND_ADDRESS),
         liquidityProgram: jupDepositContext.liquidityProgram,
         rateModel: jupDepositContext.rateModel,
         rewardsRateModel: jupDepositContext.rewardsRateModel,
-        supplyTokenReservesLiquidity:
-          jupDepositContext.supplyTokenReservesLiquidity,
+        supplyTokenReservesLiquidity : jupDepositContext.supplyTokenReservesLiquidity,
         vault: jupDepositContext.vault,
       })
       .signers([user])
-      .rpc({ skipPreflight: true });
+      .rpc({skipPreflight: true});
 
-    console.log("Jup tx check : ", depositTx);
+    // const depositTx = await program.methods
+    //   .deposit(usdcAmountWithDecimals)
+    //   .accounts({
+    //     user: user.publicKey,
+    //     admin: admin.publicKey,
+    //     usdcMint: usdcMint,
 
-    mainVaultUSDCAta = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
-    console.log("User USDT ATA address : ", mainVaultUSDCAta.address.toBase58());
-    console.log("Checking current user ATA USDC balance :", mainVaultUSDCAta.amount);
+    //     fTokenMint: jupDepositContext.fTokenMint,
+    //     lendingAdmin: jupDepositContext.lendingAdmin,
+    //     lending: jupDepositContext.lending,
+    //     supplyTokenReservesLiquidity: jupDepositContext.supplyTokenReservesLiquidity,
+    //     lendingSupplyPositionOnLiquidity: jupDepositContext.lendingSupplyPositionOnLiquidity,
+    //     rateModel: jupDepositContext.rateModel,
+    //     vault: jupDepositContext.vault,
+    //     liquidity: jupDepositContext.liquidity,
+    //     liquidityProgram: jupDepositContext.liquidityProgram,
+    //     rewardsRateModel: jupDepositContext.rewardsRateModel,
+    //     tokenProgram: TOKEN_PROGRAM_ID,
+    //     // jupLendingProgram: new anchor.web3.PublicKey(JUP_LEND_ADDRESS),
+    //   })
+    //   .signers([user])
+    //   .transaction();
 
-    // check how much ftoken do main_vault have
-    const vaultFTokenDetails = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
-    console.log("Vault F token ATA address : ", vaultFTokenDetails.address.toBase58());
-    console.log("Checking vault FToken balance : ", vaultFTokenDetails.amount);
+    // const sim = await connection.simulateTransaction(depositTx);
+    // try {
+    //   const sim = await provider.simulate(depositTx, [user]);
+    //   console.log("Success LOGS:", sim.logs);
+    // } catch (error) {
+    //   console.log("ERROR LOGS : ", error);
+    // }
+
+    console.log("Jup deposited complete ?! : ", depositTx);
   });
-
-  // it("User deposits USDC to vault", async () => {
-  //   // Transfer 100 USDC from user
-  //   const usdcDepositAmount = 100;
-  //   const usdcAmountWithDecimals = new anchor.BN(usdcDepositAmount).mul(
-  //     new anchor.BN(10).pow(new anchor.BN(usdcMintDetails.decimals))
-  //   );
-
-  //   const { getDepositContext } = await import("@jup-ag/lend/earn");
-
-  //   // const checking = getAssociatedTokenAddressSync(usdcMint, vaultPda);
-  //   const jupDepositContext = await getDepositContext({
-  //     asset: usdcMint,
-  //     connection: provider.connection,
-  //     signer: user.publicKey, // TODO : change this to main_vault
-  //     // signer: vaultPda, // TODO : change this to main_vault
-  //   });
-
-  //   const depositTx = await program.methods.deposit(usdcAmountWithDecimals)
-  //     .accounts({
-  //       user: user.publicKey,
-  //       admin : admin.publicKey,
-  //       usdcMint: usdcMint,
-
-  //       fTokenMint : jupDepositContext.fTokenMint,
-  //       lendingAdmin: jupDepositContext.lendingAdmin,
-  //       lending: jupDepositContext.lending,
-  //       supplyTokenReservesLiquidity : jupDepositContext.supplyTokenReservesLiquidity,
-  //       lendingSupplyPositionOnLiquidity: jupDepositContext.lendingSupplyPositionOnLiquidity,
-  //       rateModel: jupDepositContext.rateModel,
-  //       vault: jupDepositContext.vault,
-  //       liquidity: jupDepositContext.liquidity,
-  //       liquidityProgram: jupDepositContext.liquidityProgram,
-  //       rewardsRateModel: jupDepositContext.rewardsRateModel,
-  //       tokenProgram: TOKEN_PROGRAM_ID,
-  //     })
-  //     .signers([user])
-  //     .rpc();
-
-  //   // const depositTx = await program.methods
-  //   //   .deposit(usdcAmountWithDecimals)
-  //   //   .accounts({
-  //   //     user: user.publicKey,
-  //   //     admin: admin.publicKey,
-  //   //     usdcMint: usdcMint,
-
-  //   //     fTokenMint: jupDepositContext.fTokenMint,
-  //   //     lendingAdmin: jupDepositContext.lendingAdmin,
-  //   //     lending: jupDepositContext.lending,
-  //   //     supplyTokenReservesLiquidity: jupDepositContext.supplyTokenReservesLiquidity,
-  //   //     lendingSupplyPositionOnLiquidity: jupDepositContext.lendingSupplyPositionOnLiquidity,
-  //   //     rateModel: jupDepositContext.rateModel,
-  //   //     vault: jupDepositContext.vault,
-  //   //     liquidity: jupDepositContext.liquidity,
-  //   //     liquidityProgram: jupDepositContext.liquidityProgram,
-  //   //     rewardsRateModel: jupDepositContext.rewardsRateModel,
-  //   //     tokenProgram: TOKEN_PROGRAM_ID,
-  //   //     // jupLendingProgram: new anchor.web3.PublicKey(JUP_LEND_ADDRESS),
-  //   //   })
-  //   //   .signers([user])
-  //   //   .transaction();
-
-  //   // const sim = await connection.simulateTransaction(depositTx);
-  //   // try {
-  //   //   const sim = await provider.simulate(depositTx, [user]);
-  //   //   console.log("Success LOGS:", sim.logs);
-  //   // } catch (error) {
-  //   //   console.log("ERROR LOGS : ", error);
-  //   // }
-
-  //   // console.log("Jup deposited complete ?! : ", depositTx);
-  // });
 });

@@ -1,7 +1,7 @@
 use std::ops::{Div, Mul};
 
 use anchor_lang::{prelude::*};
-use anchor_spl::{associated_token::AssociatedToken, token::{transfer_checked, TransferChecked}, token_interface::{Mint, TokenAccount, TokenInterface}};
+use anchor_spl::{associated_token::AssociatedToken, token::{Token, TransferChecked, transfer_checked}, token_interface::{Mint, TokenAccount}};
 
 use crate::{AllocationConfig, AllocationMode, JupLending, UserPosition, Vault};
 use crate::error::ErrorCode;
@@ -41,6 +41,7 @@ pub struct Deposit<'info> {
     pub main_vault: Account<'info, Vault>,   // Global vault
 
     #[account(
+        // add a constriant to confirm which admin yield instruction it belongs it
         seeds=[b"allocation_config", admin.key().as_ref() ],
         bump
     )]
@@ -63,8 +64,6 @@ pub struct Deposit<'info> {
         bump
     )]
     pub user_position : Account<'info, UserPosition>,
-
-
 
     // TODO : Isolating structures were giving errors, find a better way to better clean this up in a neat struct later
     // Jup related accounts
@@ -124,7 +123,7 @@ pub struct Deposit<'info> {
 
 
     pub system_program: Program<'info, System>,
-    pub token_program: Interface<'info, TokenInterface>,
+    pub token_program: Program<'info, Token>,
     pub associated_token_program : Program<'info, AssociatedToken>,
 
 }
@@ -197,11 +196,7 @@ impl<'info> Deposit<'info> {
         let signer_seeds: &[&[&[u8]]] = &[&[b"vault",admin_key.as_ref(),&[self.main_vault.bump]]];
 
         let cpi_program = self.jup_lending_program.to_account_info();
-        // let cpi_context = CpiContext::new(cpi_program, jup_cpi_accounts);
         let cpi_context = CpiContext::new_with_signer(cpi_program, jup_cpi_accounts, signer_seeds);
-
-        // jup_cpi::deposit(cpi_context, deposited_amount)?;
-
         match jup_cpi::deposit(cpi_context, deposited_amount) {
             Ok(_) => Ok(()), // CPI was successful, continue
             Err(_) => Err(ErrorCode::CpiToLendingProgramFailed.into()), // CPI failed, return custom error
@@ -283,11 +278,11 @@ impl<'info> Deposit<'info> {
 pub fn handler(ctx : Context<Deposit>, deposited_amount : u64) -> Result<()>{
     // TODO: Perform proper error handling later using match
     msg!("It's starting ::::::");
-    ctx.accounts.initialize_user_position(deposited_amount, ctx.bumps.user_position)?;
-    ctx.accounts.update_vault_state(deposited_amount)?;
+    // ctx.accounts.initialize_user_position(deposited_amount, ctx.bumps.user_position)?;
+    // ctx.accounts.update_vault_state(deposited_amount)?;
 
-    msg!("Starting to deposit ::::::");
-    ctx.accounts.desposit_to_vault_ata(deposited_amount)?;
-    ctx.accounts.allocate_funds(deposited_amount)?;
+    // msg!("Starting to deposit ::::::");
+    // ctx.accounts.desposit_to_vault_ata(deposited_amount)?;
+    // ctx.accounts.allocate_funds(deposited_amount)?;
     Ok(())
 }

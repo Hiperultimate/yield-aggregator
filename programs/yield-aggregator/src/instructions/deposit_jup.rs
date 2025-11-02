@@ -8,6 +8,8 @@ use anchor_spl::token_interface::{Mint, TokenAccount};
 use crate::error::ErrorCode;
 use crate::{Vault, jup_cpi};
 use crate::jup_accounts;
+use crate::JupLendingProgram;
+
 
 #[error_code]
 pub enum ErrorCodes {
@@ -26,6 +28,22 @@ pub struct DepositJup<'info> {
         constraint = main_vault.authority.key() == admin.key()
     )]
     pub admin : AccountInfo<'info>,
+
+    /// mint (read-only)
+    #[account(
+        constraint = main_vault.usdc_mint.key() == mint.key(), 
+        mint::token_program=token_program
+    )]
+    pub mint : InterfaceAccount<'info, Mint>,   // USDC Mint
+
+    #[account(
+        mut,
+        // constraint = main_vault.vault_usdc_ata.key() == main_vault_usdc_ata.key(), // We add this later
+        associated_token::mint=mint,
+        associated_token::authority=signer,
+        associated_token::token_program=token_program
+    )]
+    pub signer_token_account : InterfaceAccount<'info, TokenAccount>,
 
     #[account(
         mut,
@@ -52,33 +70,13 @@ pub struct DepositJup<'info> {
     )]
     pub main_vault_f_token_ata : InterfaceAccount<'info, TokenAccount>,
 
-    /// depositor_token_account (mutable)
-    #[account(mut)]
-    /// CHECK: Validated by lending program
-    pub depositor_token_account: AccountInfo<'info>,
-
-    /// recipient_token_account (mutable)
-    // #[account(mut)]
-    // /// CHECK: Validated by lending program
-    // pub signer_token_account: AccountInfo<'info>,    // send main_vault usdc ata
+    /// f_token_mint (mutable)
     #[account(
         mut,
-        // constraint = main_vault.vault_usdc_ata.key() == main_vault_usdc_ata.key(), // We add this later
-        associated_token::mint=mint,
-        associated_token::authority=signer,
-        associated_token::token_program=token_program
-    )]
-    pub signer_token_account : InterfaceAccount<'info, TokenAccount>,
-
-    /// mint (read-only)
-    /// CHECK: Validated by lending program
-    // pub mint: AccountInfo<'info>,
-
-    #[account(
-        constraint = main_vault.usdc_mint.key() == mint.key(), 
         mint::token_program=token_program
     )]
-    pub mint : InterfaceAccount<'info, Mint>,
+    pub f_token_mint : InterfaceAccount<'info, Mint>,
+
 
     /// lending_admin (read-only)
     /// CHECK: Validated by lending program
@@ -88,30 +86,30 @@ pub struct DepositJup<'info> {
     #[account(mut)]
     /// CHECK: Validated by lending program
     pub lending: AccountInfo<'info>,
-
-    /// f_token_mint (mutable)
-    #[account(mut)]
-    /// CHECK: Validated by lending program
-    pub f_token_mint: AccountInfo<'info>,
-
+    
     /// supply_token_reserves_liquidity (mutable)
     #[account(mut)]
     /// CHECK: Validated by lending program
     pub supply_token_reserves_liquidity: AccountInfo<'info>,
-
+    
     /// lending_supply_position_on_liquidity (mutable)
     #[account(mut)]
     /// CHECK: Validated by lending program
     pub lending_supply_position_on_liquidity: AccountInfo<'info>,
-
+    
     /// rate_model (read-only)
     /// CHECK: Validated by lending program
     pub rate_model: AccountInfo<'info>,
-
+    
     /// vault (mutable)
     #[account(mut)]
     /// CHECK: Validated by lending program
     pub vault: AccountInfo<'info>,
+    
+    /// depositor_token_account (mutable)
+    #[account(mut)]
+    /// CHECK: Validated by lending program
+    pub depositor_token_account: AccountInfo<'info>,
 
     /// liquidity (mutable)
     #[account(mut)]
@@ -128,11 +126,11 @@ pub struct DepositJup<'info> {
     pub rewards_rate_model: AccountInfo<'info>,
 
     /// CHECK: Validated by lending program
-    pub lending_program: UncheckedAccount<'info>,
+    pub lending_program: Program<'info, JupLendingProgram>,
 
+    pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
-    pub system_program: Program<'info, System>,
 }
 
 
