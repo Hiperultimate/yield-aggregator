@@ -1,24 +1,17 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::{
-    account_info::AccountInfo,
-    instruction::{AccountMeta, Instruction},
-    program::invoke,
+    account_info::AccountInfo
 };
 use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::Token;
-// use crate::jup_cpi;
-// use crate::jup_accounts;
-// use crate::JupLendingProgram;
+use crate::error::ErrorCode;
+use crate::jup_cpi;
+use crate::jup_accounts;
 
 #[error_code]
 pub enum ErrorCodes {
     #[msg("CPI_TO_LENDING_PROGRAM_FAILED")]
     CpiToLendingProgramFailed,
-}
-
-fn get_deposit_discriminator() -> Vec<u8> {
-    // discriminator = sha256("global:deposit")[0..8]
-    vec![242, 35, 198, 137, 82, 225, 242, 182]  // mainnet instruction
 }
 
 #[derive(Accounts)]
@@ -38,11 +31,11 @@ pub struct DepositJup<'info> {
     pub recipient_token_account: AccountInfo<'info>,
 
     /// mint (read-only)
-    /// /// CHECK: Validated by lending program
+    /// CHECK: Validated by lending program
     pub mint: AccountInfo<'info>,
 
     /// lending_admin (read-only)
-    /// /// CHECK: Validated by lending program
+    /// CHECK: Validated by lending program
     pub lending_admin: AccountInfo<'info>,
 
     /// lending (mutable)
@@ -66,7 +59,7 @@ pub struct DepositJup<'info> {
     pub lending_supply_position_on_liquidity: AccountInfo<'info>,
 
     /// rate_model (read-only)
-    /// /// CHECK: Validated by lending program
+    /// CHECK: Validated by lending program
     pub rate_model: AccountInfo<'info>,
 
     /// vault (mutable)
@@ -99,79 +92,31 @@ pub struct DepositJup<'info> {
 
 impl<'info> DepositJup<'info> {
     pub fn deposit(&self, amount: u64) -> Result<()> {
-        let mut instruction_data = get_deposit_discriminator();
-        instruction_data.extend_from_slice(&amount.to_le_bytes());
-
-        let account_metas = vec![
-            // signer (mutable, signer)
-            AccountMeta::new(*self.signer.key, true),
-            // depositor_token_account (mutable)
-            AccountMeta::new(*self.depositor_token_account.key, false),
-            // recipient_token_account (mutable)
-            AccountMeta::new(*self.recipient_token_account.key, false),
-            // mint
-            AccountMeta::new_readonly(*self.mint.key, false),
-            // lending_admin (readonly)
-            AccountMeta::new_readonly(*self.lending_admin.key, false),
-            // lending (mutable)
-            AccountMeta::new(*self.lending.key, false),
-            // f_token_mint (mutable)
-            AccountMeta::new(*self.f_token_mint.key, false),
-            // supply_token_reserves_liquidity (mutable)
-            AccountMeta::new(*self.supply_token_reserves_liquidity.key, false),
-            // lending_supply_position_on_liquidity (mutable)
-            AccountMeta::new(*self.lending_supply_position_on_liquidity.key, false),
-            // rate_model (readonly)
-            AccountMeta::new_readonly(*self.rate_model.key, false),
-            // vault (mutable)
-            AccountMeta::new(*self.vault.key, false),
-            // liquidity (mutable)
-            AccountMeta::new(*self.liquidity.key, false),
-            // liquidity_program (mutable)
-            AccountMeta::new(*self.liquidity_program.key, false),
-            // rewards_rate_model (readonly)
-            AccountMeta::new_readonly(*self.rewards_rate_model.key, false),
-            // token_program
-            AccountMeta::new_readonly(*self.token_program.key, false),
-            // associated_token_program
-            AccountMeta::new_readonly(*self.associated_token_program.key, false),
-            // system_program
-            AccountMeta::new_readonly(*self.system_program.key, false),
-        ];
-
-        msg!("Checking lending program {:?}", self.lending_program.key());
-        // msg!("Instruction data {:?}", self.instruction_data);
-
-        let instruction = Instruction {
-            program_id: *self.lending_program.key,
-            accounts: account_metas,
-            data: instruction_data,
+        let jup_accounts = jup_accounts::Deposit{
+            associated_token_program : self.associated_token_program.to_account_info(),
+            depositor_token_account : self.depositor_token_account.to_account_info(),
+            f_token_mint: self.f_token_mint.to_account_info(),
+            lending: self.lending.to_account_info(),
+            lending_admin: self.lending_admin.to_account_info() ,
+            lending_supply_position_on_liquidity: self.lending_supply_position_on_liquidity.to_account_info() ,
+            liquidity: self.liquidity.to_account_info() , 
+            liquidity_program: self.liquidity_program.to_account_info() ,
+            mint: self.mint.to_account_info() , 
+            rate_model: self.rate_model.to_account_info() ,
+            recipient_token_account: self.recipient_token_account.to_account_info() ,
+            rewards_rate_model: self.rewards_rate_model.to_account_info() ,
+            signer: self.signer.to_account_info() ,
+            supply_token_reserves_liquidity: self.supply_token_reserves_liquidity.to_account_info() ,
+            system_program: self.system_program.to_account_info() ,
+            token_program: self.token_program.to_account_info() ,
+            vault: self.vault.to_account_info() , 
         };
-
-        invoke(
-            &instruction,
-            &[
-                self.signer.to_account_info(),
-                self.depositor_token_account.clone(),
-                self.recipient_token_account.clone(),
-                self.mint.clone(),
-                self.lending_admin.clone(),
-                self.lending.clone(),
-                self.f_token_mint.clone(),
-                self.supply_token_reserves_liquidity.clone(),
-                self.lending_supply_position_on_liquidity.clone(),
-                self.rate_model.clone(),
-                self.vault.clone(),
-                self.liquidity.clone(),
-                self.liquidity_program.clone(),
-                self.rewards_rate_model.clone(),
-                self.token_program.to_account_info(),
-                self.associated_token_program.to_account_info(),
-                self.system_program.to_account_info(),
-            ],
-        )
-        .map_err(|_| ErrorCodes::CpiToLendingProgramFailed.into())
-        // Ok(())
+        let jup_cpi_program = self.lending_program.to_account_info();
+        let jup_cpi_context = CpiContext::new(jup_cpi_program, jup_accounts);
+        match jup_cpi::deposit(jup_cpi_context, amount){
+            Ok(_) => Ok(()),
+            Err(_) => Err(ErrorCode::CpiToLendingProgramFailed.into())
+        }
     }
 }
 
