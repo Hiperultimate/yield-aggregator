@@ -1,5 +1,5 @@
 import { web3 } from "@coral-xyz/anchor";
-import { ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddress, Mint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
+import { ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddress, type Mint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import axios from "axios";
 
 export const confirmTx = async (

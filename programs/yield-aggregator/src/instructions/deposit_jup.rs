@@ -21,7 +21,7 @@ pub enum ErrorCodes {
 pub struct DepositJup<'info> {
     /// signer (mutable, signer = true)
     #[account(mut)]
-    pub signer: Signer<'info>, // user
+    pub user: Signer<'info>, // user
 
     /// CHECK: admin details required to derive vault
     #[account(
@@ -31,19 +31,19 @@ pub struct DepositJup<'info> {
 
     /// mint (read-only)
     #[account(
-        constraint = main_vault.usdc_mint.key() == mint.key(), 
+        constraint = main_vault.usdc_mint.key() == usdc_mint.key(), 
         mint::token_program=token_program
     )]
-    pub mint : InterfaceAccount<'info, Mint>,   // USDC Mint
+    pub usdc_mint : InterfaceAccount<'info, Mint>,   // USDC Mint
 
     #[account(
         mut,
         // constraint = main_vault.vault_usdc_ata.key() == main_vault_usdc_ata.key(), // We add this later
-        associated_token::mint=mint,
-        associated_token::authority=signer,
+        associated_token::mint=usdc_mint,
+        associated_token::authority=user,
         associated_token::token_program=token_program
     )]
-    pub signer_token_account : InterfaceAccount<'info, TokenAccount>,
+    pub user_usdc_ata : InterfaceAccount<'info, TokenAccount>,
 
     #[account(
         mut,
@@ -52,14 +52,30 @@ pub struct DepositJup<'info> {
     )]
     pub main_vault: Account<'info, Vault>,   // Global vault | Use this account to make the deposit
 
+    // #[account(
+    //     // add a constriant to confirm which admin yield instruction it belongs it
+    //     seeds=[b"allocation_config", admin.key().as_ref() ],
+    //     bump
+    // )]
+    // pub vault_allocation_config : Account<'info, AllocationConfig>,
+
     #[account(
         mut,
         constraint = main_vault.vault_usdc_ata.key() == main_vault_usdc_ata.key(),
-        associated_token::mint=mint,
+        associated_token::mint=usdc_mint,
         associated_token::authority=main_vault,
         associated_token::token_program=token_program
     )]
     pub main_vault_usdc_ata : InterfaceAccount<'info, TokenAccount>,
+
+    // #[account(
+    //     init_if_needed,
+    //     payer=user,
+    //     seeds = [b"user_position", user.key().as_ref()],
+    //     space=8+UserPosition::INIT_SPACE,
+    //     bump
+    // )]
+    // pub user_position : Account<'info, UserPosition>,
 
     #[account(
         mut,
@@ -139,14 +155,14 @@ impl<'info> DepositJup<'info> {
 
         // deposit usdc to main_vault_usdc_ata from user account
         let accounts = TransferChecked { 
-            authority: self.signer.to_account_info(),
-            from: self.signer_token_account.to_account_info(),
+            authority: self.user.to_account_info(),
+            from: self.user_usdc_ata.to_account_info(),
             to: self.main_vault_usdc_ata.to_account_info(),
-            mint: self.mint.to_account_info(),
+            mint: self.usdc_mint.to_account_info(),
         };
         let cpi_context = CpiContext::new(self.token_program.to_account_info(), accounts);
 
-        transfer_checked(cpi_context, amount, self.mint.decimals)?;
+        transfer_checked(cpi_context, amount, self.usdc_mint.decimals)?;
 
 
         // transfer to jup
@@ -162,7 +178,7 @@ impl<'info> DepositJup<'info> {
             lending_supply_position_on_liquidity: self.lending_supply_position_on_liquidity.to_account_info() ,
             liquidity: self.liquidity.to_account_info() , 
             liquidity_program: self.liquidity_program.to_account_info() ,
-            mint: self.mint.to_account_info() , 
+            mint: self.usdc_mint.to_account_info() , 
             rate_model: self.rate_model.to_account_info() ,
             rewards_rate_model: self.rewards_rate_model.to_account_info() ,
             supply_token_reserves_liquidity: self.supply_token_reserves_liquidity.to_account_info() ,
