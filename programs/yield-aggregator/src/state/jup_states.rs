@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 
 #[account]
-pub struct JupLending {
+pub struct Lending {
     pub mint: Pubkey,                         // usdc mint address
     pub f_token_mint: Pubkey,                 // f-token mint address
     pub lending_id: u16,                      // Unique ID for the lending market
