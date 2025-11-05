@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 
 #[account]
+#[derive(Debug)]
 pub struct Lending {
     pub mint: Pubkey,                         // usdc mint address
     pub f_token_mint: Pubkey,                 // f-token mint address

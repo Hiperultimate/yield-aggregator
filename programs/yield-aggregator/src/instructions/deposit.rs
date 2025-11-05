@@ -146,13 +146,14 @@ pub struct Deposit<'info> {
 
 
 impl<'info> Deposit<'info> {
-    pub fn initialize_user_position(&mut self, deposited_amount : u64, user_position_bump: u8) -> Result<()>{
+    pub fn update_user_position(&mut self, deposited_amount : u64, user_position_bump: u8) -> Result<()>{
         let current_time = Clock::get().unwrap().unix_timestamp;
 
         let user_position_info = self.user_position.to_account_info();
         let existed = user_position_info.lamports() > 0 && user_position_info.data_len() > 0;
 
         if !existed {
+            // User is new, create user_position
             self.user_position.vault = self.main_vault.key();
             self.user_position.user = self.user.key();
             self.user_position.deposited_amount = deposited_amount;
@@ -161,7 +162,9 @@ impl<'info> Deposit<'info> {
             self.user_position.bump = user_position_bump;
 
         } else {
+            // Existing user, update existing user_position
             self.user_position.deposited_amount += deposited_amount;
+            self.user_position.last_updated = current_time;
         }
 
         Ok(())
@@ -229,8 +232,12 @@ impl<'info> Deposit<'info> {
         // Current price held in jup
         let vault_f_token_balance = self.main_vault_f_token_ata.amount;
         let lending_data = JupLending::try_deserialize(&mut &self.lending.data.borrow()[..])?;
-        let token_exchange_price = lending_data.token_exchange_price;   // it could be that lending is not initialized yet if this is the first deposit, need to check
-        let jup_usdc_value = vault_f_token_balance.mul(token_exchange_price).div(10_u64.pow(self.usdc_mint.decimals as u32) );
+        let token_exchange_price = lending_data.token_exchange_price;   // price of 1 F-token in terms of USDC, if you need usdc val then / 10 ** 12
+        let jup_usdc_scaled : u128 = (vault_f_token_balance as u128)
+                                        .checked_mul(token_exchange_price as u128)
+                                        .and_then(|v| v.checked_div(10_u128.pow(12 ))) // div by 10**12 because of token_exchange_price
+                                        .unwrap();
+        let jup_usdc_value : u64 = jup_usdc_scaled.try_into().unwrap(); // f-token non-decimal version, 10**6
 
         // Current price held in kamino
         let kamino_usdc_value: u64 = 0;  // dummy value for now
@@ -245,15 +252,15 @@ impl<'info> Deposit<'info> {
                 let a_k = kamino_usdc_value; // current price in Kamino
                 let t = a_j + a_k;  // total price invested
 
-                let r_j = self.vault_allocation_config.jup_allocation as u64; // jup ratio
-                let r_k = self.vault_allocation_config.kamino_allocation as u64; // kamino ratio
+                let r_j = self.vault_allocation_config.jup_allocation as u128; // jup ratio percent, i.e. contains values like 4722, 47.22% = 4722
+                let r_k = self.vault_allocation_config.kamino_allocation as u128; // kamino ratio
                 let d = deposited_amount;   // new deposit amount
 
-                let t_n = t + d;    // new total
-                let a_nj = r_j.mul(t_n);
-                let a_nk = r_k.mul(t_n);
-                let mut addj = a_nj - a_j;
-                let mut addk = a_nk - a_k;
+                let t_n = (t + d) as u128;    // new total
+                let a_nj = r_j.checked_mul(t_n).and_then(|v| v.checked_div(10_000)).unwrap() as u64;    // total jup amount     div by 10_000 because 4722 percent conversion = 47.22 % / 100 = 0.4722 / 10_000
+                let a_nk = r_k.checked_mul(t_n).and_then(|v| v.checked_div(10_000)).unwrap() as u64;    // total kamino amount
+                let mut addj = a_nj - a_j;  // jup amount to add
+                let mut addk = a_nk - a_k;  // kamino amount to add
 
                 // Handle impossible / out of bound scenarios
                 if addj < 0 {
@@ -267,20 +274,20 @@ impl<'info> Deposit<'info> {
                 }
                 else {
                     // both positive - normal case
+                    // normalizing if addj + addk > d
                     if addj + addk > d {
-                            // normalize proportionally
-                            let scale = d / (addj + addk);
-                            addj = addj * scale;
-                            addk = addk * scale;
-                        }
+                        // normalize proportionally
+                        let scale = d.div(addj + addk);
+                        addj = addj * scale;
+                        addk = addk * scale;
+                    }
                 }
 
                 // Write logic to transfer addj to jup
-                msg!("addj : {}, addk : {}", addj, addk);
                 if addj > 0 {
-                    msg!("Depositing {} to JUP LEND", addj);
                     self.jup_deposit(addj)?;
                 }
+
                 
                 // Write logic to transfer addk to kamino
             },
@@ -296,7 +303,7 @@ impl<'info> Deposit<'info> {
 
 pub fn handler(ctx : Context<Deposit> , amount : u64) -> Result<()>{
     msg!("Reaching here .......");
-    ctx.accounts.initialize_user_position(amount, ctx.bumps.user_position)?;
+    ctx.accounts.update_user_position(amount, ctx.bumps.user_position)?;
     ctx.accounts.update_vault_state(amount)?;
     ctx.accounts.desposit_to_vault_ata(amount)?;
     ctx.accounts.allocate_funds(amount)?;
