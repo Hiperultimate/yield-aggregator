@@ -149,8 +149,7 @@ impl<'info> Deposit<'info> {
     pub fn update_user_position(&mut self, deposited_amount : u64, user_position_bump: u8) -> Result<()>{
         let current_time = Clock::get().unwrap().unix_timestamp;
 
-        let user_position_info = self.user_position.to_account_info();
-        let existed = user_position_info.lamports() > 0 && user_position_info.data_len() > 0;
+        let existed = self.user_position.deposited_amount > 0;
 
         if !existed {
             // User is new, create user_position
@@ -163,6 +162,9 @@ impl<'info> Deposit<'info> {
 
         } else {
             // Existing user, update existing user_position
+            msg!("Current user position amount : {}", self.user_position.deposited_amount);
+            msg!("New user position amount : {}", self.user_position.deposited_amount + deposited_amount);
+
             self.user_position.deposited_amount += deposited_amount;
             self.user_position.last_updated = current_time;
         }
@@ -170,8 +172,10 @@ impl<'info> Deposit<'info> {
         Ok(())
     }
 
-    pub fn update_vault_state(&mut self, deposited_amount : u64) -> Result<()>{
-        self.main_vault.total_deposits +=  deposited_amount;
+    pub fn update_vault_state(&mut self, total_deposited_amount : u64, jup_deposited_amount : u64, kamino_deposited_amount: u64) -> Result<()>{
+        self.main_vault.total_deposits += total_deposited_amount;
+        self.main_vault.jup_lend_balance += jup_deposited_amount;
+        self.main_vault.kamino_balance += kamino_deposited_amount;
         Ok(())
     }
 
@@ -288,13 +292,23 @@ impl<'info> Deposit<'info> {
                     self.jup_deposit(addj)?;
                 }
 
+                if(addk > 0){
+                    // Call kamino deposit function here
+                }
                 
                 // Write logic to transfer addk to kamino
+
+                // Update main_vault states
+                self.update_vault_state(deposited_amount, addj, addk)?;
+        
             },
             AllocationMode::Dynamic => {
                 // auto balancing
+
+                // Update vault states using self.update_vault_state function
             }
         }
+
         
         Ok(())
     }
@@ -304,7 +318,6 @@ impl<'info> Deposit<'info> {
 pub fn handler(ctx : Context<Deposit> , amount : u64) -> Result<()>{
     msg!("Reaching here .......");
     ctx.accounts.update_user_position(amount, ctx.bumps.user_position)?;
-    ctx.accounts.update_vault_state(amount)?;
     ctx.accounts.desposit_to_vault_ata(amount)?;
     ctx.accounts.allocate_funds(amount)?;
     Ok(())

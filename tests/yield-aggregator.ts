@@ -67,16 +67,6 @@ describe("yield-aggregator", () => {
     usdcMint = usdcMintDetails.address;
     console.log("USDC Supply : ", usdcMintDetails.supply);
 
-    // Check how much USDC does provider.wallet has
-    // const mainWallet = provider.wallet;
-    // await setUSDCViaCheatcode(mainWallet.publicKey.toBase58(), 500, usdcMintDetails);
-    // const mainWalletUSDCAta = getAssociatedTokenAddressSync(usdcMint, mainWallet.publicKey, false);
-    // const maintWalletUSDCAtaDetails = await getAccount(provider.connection, mainWalletUSDCAta, "confirmed");
-
-    // This may be un-required later on
-    // get the mint address from jup lend sdk
-    // get jupFtoken mint details using getMint
-
     const { getDepositContext } = await import("@jup-ag/lend/earn");
 
     const depositContext = await getDepositContext({
@@ -228,104 +218,71 @@ describe("yield-aggregator", () => {
     });
 
     const usdcDepositAmount = 100;
-    const usdcAmountWithDecimals = new anchor.BN(usdcDepositAmount).mul(
+    const depositAmountWithDecimals = new anchor.BN(usdcDepositAmount).mul(
       new anchor.BN(10).pow(new anchor.BN(usdcMintDetails.decimals))
     );
 
-    console.log("Signer details : ", user.publicKey.toString());
-    console.log("Jup Signer details : ", jupDepositContext.signer.toString());
+    // Verify initial vault USDC ATA balance is 0
+    const initialVaultUsdcAta = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+    expect(new anchor.BN(initialVaultUsdcAta.amount.toString()).eq(new anchor.BN(0))).to.be.true;
 
-    const accountsToCheck = [
-      jupDepositContext.depositorTokenAccount,
-      jupDepositContext.fTokenMint,
-      jupDepositContext.lending,
-      jupDepositContext.lendingAdmin,
-      jupDepositContext.lendingBorrowPositionOnLiquidity,
-      jupDepositContext.liquidity,
-      new anchor.web3.PublicKey(JUP_LEND_ADDRESS),
-      jupDepositContext.liquidityProgram,
-      jupDepositContext.mint,
-      jupDepositContext.rateModel,
-      jupDepositContext.recipientTokenAccount,
-      jupDepositContext.rewardsRateModel,
-      jupDepositContext.signer,
-      jupDepositContext.supplyTokenReservesLiquidity,
-      jupDepositContext.systemProgram,
-      jupDepositContext.tokenProgram,
-      jupDepositContext.vault,
-      ASSOCIATED_TOKEN_PROGRAM_ID,
-    ];
-
-    for (const account of accountsToCheck) {
-      try {
-        const info = await connection.getAccountInfo(account);
-        if (!info) {
-          console.log(`Account ${account.toString()} does not exist`);
-        } else {
-          console.log(`Account ${account.toString()} exists`);
-        }
-      } catch (error) {
-        console.log(
-          `Error checking account ${account.toString()}: ${error.message}`
-        );
-      }
-    }
-
-    // Checking user balance 
-    let userBalance = await provider.connection.getBalance(user.publicKey);
-    console.log("Checking current user SOL balance :", userBalance / anchor.web3.LAMPORTS_PER_SOL);
-
-    // Check user USDT balance here
-    let mainVaultUSDCAta = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
-    console.log("User USDT ATA address : ", mainVaultUSDCAta.address.toBase58());
-    console.log("Checking current user ATA USDC balance :", mainVaultUSDCAta.amount);
-
-    try {
-      const accountInfo = await connection.getAccountInfo(userPositionPda);
-      if (accountInfo) {
-        console.log("userPositionPda exists");
-      } else {
-        console.log("userPositionPda does not exist");
-      }
-    } catch (error) {
-      console.log("Error checking userPositionPda:", error.message);
-    }
-
+    // Execute deposit transaction
     const depositTx = await program.methods
-      .deposit(usdcAmountWithDecimals)
+      .deposit(depositAmountWithDecimals)
       .accounts({
         admin: admin.publicKey,
         // THESE FIELDS ARE DIFFERENT -> signer, depositorTokenAccount, recipientTokenAccount
         user: jupDepositContext.signer, // should be the user who is depositing token
         depositorTokenAccount: jupDepositContext.depositorTokenAccount,  // should be the user usdc ATA
         usdcMint: jupDepositContext.mint,
-        
         fTokenMint: jupDepositContext.fTokenMint,
         lending: jupDepositContext.lending,
         lendingAdmin: jupDepositContext.lendingAdmin,
-        lendingSupplyPositionOnLiquidity:
-          jupDepositContext.lendingSupplyPositionOnLiquidity,
+        lendingSupplyPositionOnLiquidity: jupDepositContext.lendingSupplyPositionOnLiquidity,
         liquidity: jupDepositContext.liquidity,
         liquidityProgram: jupDepositContext.liquidityProgram,
         rateModel: jupDepositContext.rateModel,
         rewardsRateModel: jupDepositContext.rewardsRateModel,
-        supplyTokenReservesLiquidity:
-          jupDepositContext.supplyTokenReservesLiquidity,
+        supplyTokenReservesLiquidity: jupDepositContext.supplyTokenReservesLiquidity,
         vault: jupDepositContext.vault,
       })
       .signers([user])
       .rpc({ skipPreflight: true });
 
-    console.log("Jup tx check : ", depositTx);
+    console.log("Deposit transaction signature:", depositTx);
 
-    mainVaultUSDCAta = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
-    console.log("User USDT ATA address : ", mainVaultUSDCAta.address.toBase58());
-    console.log("Checking current user ATA USDC balance :", mainVaultUSDCAta.amount);
+    // Verify vault USDC ATA balance (remainder after allocation)
+    const vaultUsdcAtaDetails = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+    expect(new anchor.BN(vaultUsdcAtaDetails.amount.toString()).eq(new anchor.BN(50 * 10 ** 6))).to.be.true;
 
-    // check how much ftoken do main_vault have
+    // Verify vault F-token balance (allocated to Jup)
+    // Note : exchange rate of f-token to USDC is around 1.08 SOL, which is why we are checking a range
     const vaultFTokenDetails = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
-    console.log("Vault F token ATA address : ", vaultFTokenDetails.address.toBase58());
-    console.log("Checking vault FToken balance : ", vaultFTokenDetails.amount);
-  });
+    expect(Number(vaultFTokenDetails.amount)).to.be.closeTo(50 * 10 ** 6, 2 * 10 ** 6);
 
-});
+    // Verify user position creation/update
+    const userPosition = await program.account.userPosition.fetch(userPositionPda);
+    expect(userPosition.depositedAmount.eq(depositAmountWithDecimals), "User deposited amount not matching").to.be.true;
+    expect(userPosition.earnedYield.eq(new anchor.BN(0)), "User earned yield should be initialized to 0").to.be.true;
+    expect(userPosition.vault.equals(vaultPda), "User position vault should exist and match with vaultPda public key").to.be.true; // why is this failing
+
+    // Verify vault state update
+    const vault = await program.account.vault.fetch(vaultPda);
+    expect(vault.totalDeposits.eq(depositAmountWithDecimals), "Vault total deposit should now be increased from 0 to deposited amount").to.be.true;
+    expect(vault.jupLendBalance.toNumber(), "Vault's jup lend balance should be exactly half of the initial payment because of the current balance percent").eq(50 * 10 ** 6);
+    expect(vault.kaminoBalance.toNumber(), "Vault's kamino balance should be exactly half of the initial payment because of the current balance percent").eq(50 * 10 ** 6);
+
+    // Verify user USDC balance decrease
+    const userUsdcDetails = await getAccount(provider.connection, userUsdcAta, "confirmed");
+    const initialUserBalance = 1000 * 10 ** usdcMintDetails.decimals;
+    const expectedUserBalance = initialUserBalance - usdcDepositAmount * 10 ** usdcMintDetails.decimals;
+    expect(new anchor.BN(userUsdcDetails.amount.toString()).eq(new anchor.BN(expectedUserBalance))).to.be.true;
+
+    // Verify allocation config remains unchanged
+    const allocConfig = await program.account.allocationConfig.fetch(allocationConfigPda);
+    expect(allocConfig.jupAllocation).to.equal(5000);
+    expect(allocConfig.kaminoAllocation).to.equal(5000);
+    expect(allocConfig.lastJupYield.eq(new anchor.BN(0))).to.be.true;
+    expect(allocConfig.lastKaminoYield.eq(new anchor.BN(0))).to.be.true;
+  })
+})
