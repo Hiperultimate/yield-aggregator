@@ -8,6 +8,8 @@
     "@coral-xyz/anchor": "^0.31.1",
     "@jup-ag/api": "^6.0.45",
     "@jup-ag/lend": "^0.0.102",
+    "@kamino-finance/klend-sdk": "^7.2.4",
+    "@solana/kit": "^5.0.0",
     "@solana/spl-token": "^0.4.14",
     "axios": "^1.13.0"
   },
