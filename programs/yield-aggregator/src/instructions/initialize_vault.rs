@@ -46,7 +46,19 @@ pub struct InitializeVault<'info> {
     )]
     pub jup_f_token_mint : InterfaceAccount<'info, Mint>,
 
-    // TODO : add kamino f token vault here too?
+    #[account(
+        mint::token_program=token_program
+    )]
+    pub kamino_collateral_mint: InterfaceAccount<'info, Mint>,
+
+    #[account(
+        init,
+        payer = admin,
+        associated_token::mint= kamino_collateral_mint,
+        associated_token::authority= vault,
+        associated_token::token_program=token_program,
+    )]
+    pub vault_kamino_token_ata: InterfaceAccount<'info, TokenAccount>,
 
     pub system_program: Program<'info, System>,
     pub token_program: Interface<'info, TokenInterface>,

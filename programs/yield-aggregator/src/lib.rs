@@ -24,9 +24,8 @@ pub mod yield_aggregator {
     }
 
     pub fn deposit(ctx : Context<Deposit>, amount : u64) -> Result<()>{
-        msg!("Running jup handler");
+        msg!("Running deposit handler");
         deposit::handler(ctx, amount)
-        // Ok(())
     }
 
     pub fn deposit_kamino(ctx : Context<DepositKamino>, amount : u64) -> Result<()>{
@@ -34,4 +33,6 @@ pub mod yield_aggregator {
         deposit_kamino::handler(ctx, amount)
         // Ok(())
     }
+
+
 }
