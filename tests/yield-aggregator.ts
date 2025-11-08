@@ -212,15 +212,16 @@ describe("yield-aggregator", () => {
   });
 
   it("Deposit USDC into vault", async () => {
-    const depositAmount = 100 * 10 ** usdcMintDetails.decimals; // 100 USDC
+    const firstDepositAmount = 50 * 10 ** usdcMintDetails.decimals; // 50 USDC
+    const secondDepositAmount = 50 * 10 ** usdcMintDetails.decimals; // 50 USDC
 
     // Check initial balances
-    const initialUserUsdcBalance = await getAccount(provider.connection, userUsdcAta, "confirmed");
-    const initialVaultUsdcBalance = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+    let initialUserUsdcBalance = await getAccount(provider.connection, userUsdcAta, "confirmed");
+    let initialVaultUsdcBalance = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
 
-    // Execute deposit
-    const tx = await program.methods
-      .deposit(new anchor.BN(depositAmount))
+    // First deposit (initialize user position)
+    let tx = await program.methods
+      .deposit(new anchor.BN(firstDepositAmount))
       .accounts({
         user: user.publicKey,
         vault: vaultPda,
@@ -230,29 +231,66 @@ describe("yield-aggregator", () => {
       .signers([user])
       .rpc();
 
-    console.log("Deposit transaction:", tx);
+    console.log("First deposit transaction:", tx);
 
-    // Check final balances
-    const finalUserUsdcBalance = await getAccount(provider.connection, userUsdcAta, "confirmed");
-    const finalVaultUsdcBalance = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+    // Check balances after first deposit
+    let userUsdcBalanceAfterFirst = await getAccount(provider.connection, userUsdcAta, "confirmed");
+    let vaultUsdcBalanceAfterFirst = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
 
-    // Verify user USDC balance decreased
-    expect(finalUserUsdcBalance.amount).to.equal(initialUserUsdcBalance.amount - BigInt(depositAmount));
+    // Verify user USDC balance decreased by first amount
+    expect(userUsdcBalanceAfterFirst.amount).to.equal(initialUserUsdcBalance.amount - BigInt(firstDepositAmount));
 
-    // Verify vault USDC balance increased
-    expect(finalVaultUsdcBalance.amount).to.equal(initialVaultUsdcBalance.amount + BigInt(depositAmount));
+    // Verify vault USDC balance increased by first amount
+    expect(vaultUsdcBalanceAfterFirst.amount).to.equal(initialVaultUsdcBalance.amount + BigInt(firstDepositAmount));
 
-    // Verify user position
-    const userPosition = await program.account.userPosition.fetch(userPositionPda);
-    expect(userPosition.shares.toNumber()).to.equal(depositAmount);
+    // Verify user position after first deposit
+    let userPosition = await program.account.userPosition.fetch(userPositionPda);
+    expect(userPosition.shares.toNumber()).to.equal(firstDepositAmount);
     expect(userPosition.rewardDebt.toNumber()).to.equal(0);
     expect(userPosition.vault.equals(vaultPda)).to.be.true;
 
-    // Verify vault state
-    const vault = await program.account.vault.fetch(vaultPda);
-    expect(vault.totalShares.toNumber()).to.equal(depositAmount);
-    expect(vault.totalUnderlying.toNumber()).to.equal(depositAmount);
-    expect(vault.unallocatedBalance.toNumber()).to.equal(depositAmount);
+    // Verify vault state after first deposit
+    let vault = await program.account.vault.fetch(vaultPda);
+    expect(vault.totalShares.toNumber()).to.equal(firstDepositAmount);
+    expect(vault.totalUnderlying.toNumber()).to.equal(firstDepositAmount);
+    expect(vault.unallocatedBalance.toNumber()).to.equal(firstDepositAmount);
+    expect(vault.accPerShare.toNumber()).to.equal(0);
+
+    // Second deposit (existing user position)
+    tx = await program.methods
+      .deposit(new anchor.BN(secondDepositAmount))
+      .accounts({
+        user: user.publicKey,
+        vault: vaultPda,
+        usdcMint: usdcMint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([user])
+      .rpc();
+
+    console.log("Second deposit transaction:", tx);
+
+    // Check final balances after second deposit
+    const finalUserUsdcBalance = await getAccount(provider.connection, userUsdcAta, "confirmed");
+    const finalVaultUsdcBalance = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+
+    // Verify user USDC balance decreased by total amount
+    expect(finalUserUsdcBalance.amount).to.equal(initialUserUsdcBalance.amount - BigInt(firstDepositAmount + secondDepositAmount));
+
+    // Verify vault USDC balance increased by total amount
+    expect(finalVaultUsdcBalance.amount).to.equal(initialVaultUsdcBalance.amount + BigInt(firstDepositAmount + secondDepositAmount));
+
+    // Verify user position after second deposit
+    userPosition = await program.account.userPosition.fetch(userPositionPda);
+    expect(userPosition.shares.toNumber()).to.equal(firstDepositAmount + secondDepositAmount);
+    expect(userPosition.rewardDebt.toNumber()).to.equal(0); // Still 0 since accPerShare is 0
+    expect(userPosition.vault.equals(vaultPda)).to.be.true;
+
+    // Verify vault state after second deposit
+    vault = await program.account.vault.fetch(vaultPda);
+    expect(vault.totalShares.toNumber()).to.equal(firstDepositAmount + secondDepositAmount);
+    expect(vault.totalUnderlying.toNumber()).to.equal(firstDepositAmount + secondDepositAmount);
+    expect(vault.unallocatedBalance.toNumber()).to.equal(firstDepositAmount + secondDepositAmount);
     expect(vault.accPerShare.toNumber()).to.equal(0);
   });
 
