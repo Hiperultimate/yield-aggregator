@@ -1,4 +1,6 @@
     use anchor_lang::prelude::*;
+use anchor_lang::solana_program::instruction::Instruction;
+use anchor_lang::solana_program::program::invoke;
 use std::ops::{Div, Mul};
 use anchor_lang::solana_program::{
     account_info::AccountInfo
@@ -7,7 +9,7 @@ use anchor_spl::associated_token::AssociatedToken;
 use anchor_spl::token::{Token, TransferChecked, transfer_checked};
 use anchor_spl::token_interface::{Mint, TokenAccount};
 use crate::error::ErrorCode;
-use crate::{AllocationConfig, AllocationMode, Lending as JupLending, UserPosition, Vault, jup_cpi};
+use crate::{AllocationConfig, AllocationMode, Lending as JupLending, UserPosition, Vault, deposit, jup_cpi};
 use crate::jup_accounts;
 use crate::JupLendingProgram;
 
@@ -38,7 +40,7 @@ pub struct Deposit<'info> {
         associated_token::authority=user,
         associated_token::token_program=token_program
     )]
-    pub user_usdc_ata : InterfaceAccount<'info, TokenAccount>,
+    pub user_usdc_ata : Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         mut,
@@ -61,7 +63,7 @@ pub struct Deposit<'info> {
         associated_token::authority=main_vault,
         associated_token::token_program=token_program
     )]
-    pub main_vault_usdc_ata : InterfaceAccount<'info, TokenAccount>,
+    pub main_vault_usdc_ata : Box<InterfaceAccount<'info, TokenAccount>>,
 
     #[account(
         init_if_needed,
@@ -79,7 +81,7 @@ pub struct Deposit<'info> {
         associated_token::authority=main_vault,
         associated_token::token_program=token_program
     )]
-    pub main_vault_f_token_ata : InterfaceAccount<'info, TokenAccount>,
+    pub main_vault_f_token_ata : Box<InterfaceAccount<'info, TokenAccount>>,
 
     /// f_token_mint (mutable)
     #[account(
@@ -139,11 +141,67 @@ pub struct Deposit<'info> {
     /// CHECK: Validated by lending program
     pub lending_program: Program<'info, JupLendingProgram>,
 
+
+    // Kamino Accounts
+
+    /// CHECK: Kamino reserve account
+    #[account(mut)]
+    pub reserve: UncheckedAccount<'info>,
+
+    /// CHECK: Lending market that the reserve belongs to
+    pub lending_market: UncheckedAccount<'info>,
+
+    /// CHECK: PDA authority for the lending market
+    pub lending_market_authority: UncheckedAccount<'info>,
+
+    /// CHECK: Mint of the liquidity token (e.g., USDC Mint)
+    // pub reserve_liquidity_mint: UncheckedAccount<'info>,
+
+    /// CHECK: Token account that stores liquidity supplied to reserve
+    #[account(mut)]
+    pub reserve_liquidity_supply: UncheckedAccount<'info>,
+
+    /// CHECK: Mint of the collateral token
+    #[account(mut)]
+    pub reserve_collateral_mint: UncheckedAccount<'info>,
+
+    /// CHECK: User's (or PDA's) token account holding USDC to deposit
+    #[account(mut)]
+    pub user_source_liquidity: UncheckedAccount<'info>,
+
+    /// CHECK: User's (or PDA's) token account receiving collateral tokens
+    #[account(
+        init,
+        payer=user,
+        associated_token::mint=reserve_collateral_mint,
+        associated_token::authority=user,
+        associated_token::token_program=token_program,
+    )]
+    pub user_destination_collateral: Box<InterfaceAccount<'info, TokenAccount>>,
+
+    /// CHECK: Token program for the collateral mint (usually TOKEN_PROGRAM_ID)
+    pub collateral_token_program: UncheckedAccount<'info>,
+
+    /// CHECK: Token program for the liquidity mint (usually TOKEN_PROGRAM_ID)
+    pub liquidity_token_program: UncheckedAccount<'info>,
+
+    /// CHECK: Instructions sysvar
+    pub instruction_sysvar_account: UncheckedAccount<'info>,
+
+    /// CHECK : klend program account
+    pub klend_program: UncheckedAccount<'info>,
+
+
     pub system_program: Program<'info, System>,
     pub token_program: Program<'info, Token>,
     pub associated_token_program: Program<'info, AssociatedToken>,
 }
 
+
+pub fn get_deposit_reserve_liquidity_discriminator()-> Vec<u8> {
+    // discriminator = sha256("global:deposit_reserve_liquidity")[0..8]
+    vec![169, 201, 30, 126, 6, 205, 102, 68]
+}
 
 impl<'info> Deposit<'info> {
     pub fn update_user_position(&mut self, deposited_amount : u64, user_position_bump: u8) -> Result<()>{
@@ -162,9 +220,6 @@ impl<'info> Deposit<'info> {
 
         } else {
             // Existing user, update existing user_position
-            msg!("Current user position amount : {}", self.user_position.deposited_amount);
-            msg!("New user position amount : {}", self.user_position.deposited_amount + deposited_amount);
-
             self.user_position.deposited_amount += deposited_amount;
             self.user_position.last_updated = current_time;
         }
@@ -173,9 +228,9 @@ impl<'info> Deposit<'info> {
     }
 
     pub fn update_vault_state(&mut self, total_deposited_amount : u64, jup_deposited_amount : u64, kamino_deposited_amount: u64) -> Result<()>{
-        self.main_vault.total_deposits += total_deposited_amount;
-        self.main_vault.jup_lend_balance += jup_deposited_amount;
-        self.main_vault.kamino_balance += kamino_deposited_amount;
+        self.main_vault.total_underlying += total_deposited_amount as u128;
+        self.main_vault.jup_lend_balance += jup_deposited_amount as u128;
+        self.main_vault.kamino_balance += kamino_deposited_amount as u128;
         Ok(())
     }
 
@@ -226,6 +281,55 @@ impl<'info> Deposit<'info> {
         }
     }
 
+    pub fn kamino_deposit(&mut self, deposited_amount : u64) -> Result<()>{
+        let mut instruction_data = get_deposit_reserve_liquidity_discriminator();
+        instruction_data.extend_from_slice(&deposited_amount.to_le_bytes());
+
+        let accounts = vec![
+            AccountMeta::new_readonly(self.user.key(), true),    // signer
+            AccountMeta::new(self.reserve.key(), false),
+            AccountMeta::new_readonly(self.lending_market.key(), false),
+            AccountMeta::new_readonly(self.lending_market_authority.key(), false),
+            AccountMeta::new_readonly(self.usdc_mint.key(), false),
+            AccountMeta::new(self.reserve_liquidity_supply.key(), false),
+            AccountMeta::new(self.reserve_collateral_mint.key(), false),
+            AccountMeta::new(self.user_source_liquidity.key(), false),
+            AccountMeta::new(self.user_destination_collateral.key(), false),
+            AccountMeta::new_readonly(self.collateral_token_program.key(), false),
+            AccountMeta::new_readonly(self.liquidity_token_program.key(), false),
+            AccountMeta::new_readonly(self.instruction_sysvar_account.key(), false),
+        ];
+        
+        let ix = Instruction {
+            program_id: self.klend_program.key(),
+            accounts,
+            data : instruction_data,
+        };
+
+        let account_infos = [
+            self.user.to_account_info(),
+            self.reserve.to_account_info(),
+            self.lending_market.to_account_info(),
+            self.lending_market_authority.to_account_info(),
+            self.usdc_mint.to_account_info(),
+            self.reserve_liquidity_supply.to_account_info(),
+            self.reserve_collateral_mint.to_account_info(),
+            self.user_source_liquidity.to_account_info(),
+            self.user_destination_collateral.to_account_info(),
+            self.collateral_token_program.to_account_info(),
+            self.liquidity_token_program.to_account_info(),
+            self.instruction_sysvar_account.to_account_info(),
+        ];
+
+        invoke(
+            &ix,
+            &account_infos,
+        )?;
+
+
+        Ok(())
+    }
+
     // TODO : create allocate_funds function which checks allocation_config and spreads the deposited_amount accordingly
     pub fn allocate_funds(&mut self, deposited_amount : u64) -> Result<()>{
         // Check the mode
@@ -244,7 +348,7 @@ impl<'info> Deposit<'info> {
         let jup_usdc_value : u64 = jup_usdc_scaled.try_into().unwrap(); // f-token non-decimal version, 10**6
 
         // Current price held in kamino
-        let kamino_usdc_value: u64 = 0;  // dummy value for now
+        let kamino_usdc_value: u64 = 0;  // needs to be updated
 
         match config_mode {
             AllocationMode::Static => {
@@ -266,25 +370,11 @@ impl<'info> Deposit<'info> {
                 let mut addj = a_nj - a_j;  // jup amount to add
                 let mut addk = a_nk - a_k;  // kamino amount to add
 
-                // Handle impossible / out of bound scenarios
-                if addj < 0 {
-                    addj = 0;
-                    addk = d;
-                }
-                // Kamino is overweight, cannot withraw -> deposit everything in Jup
-                else if addk < 0 {
-                    addj = d;
-                    addk = 0;
-                }
-                else {
-                    // both positive - normal case
-                    // normalizing if addj + addk > d
-                    if addj + addk > d {
-                        // normalize proportionally
-                        let scale = d.div(addj + addk);
-                        addj = addj * scale;
-                        addk = addk * scale;
-                    }
+                if addj + addk > d {
+                    // normalize proportionally
+                    let scale = d.div(addj + addk);
+                    addj = addj * scale;
+                    addk = addk * scale;
                 }
 
                 // Write logic to transfer addj to jup
@@ -292,8 +382,9 @@ impl<'info> Deposit<'info> {
                     self.jup_deposit(addj)?;
                 }
 
-                if(addk > 0){
-                    // Call kamino deposit function here
+                // Call kamino deposit function here
+                if addk > 0 {
+                    self.kamino_deposit(addk)?;
                 }
                 
                 // Write logic to transfer addk to kamino

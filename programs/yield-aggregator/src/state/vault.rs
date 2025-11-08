@@ -13,22 +13,44 @@ pub struct Vault {
     /// Vault's USDC ATA
     pub vault_usdc_ata: Pubkey,
 
-    /// Allocation config (target ratios)
-    pub allocation_config: Pubkey,
+    /// Total shares issued across all users.
+    /// Each user's share represents how much of the vault's total underlying they own.
+    /// 1 share ~= 1 USDC initially, but as yield accrues, 1 share > 1 USDC.
+    pub total_shares: u128,
 
-    pub total_deposits: u64,
+    /// Global accumulated yield per share (scaled by SCALER for precision).
+    /// Used to calculate user yield since their last update.
+    pub acc_per_share: u128,
 
-    pub total_yield: u64,
+    /// Total underlying USDC-equivalent value of this vault.
+    /// Includes allocations in JupLend, Kamino, and unallocated USDC sitting in the vault.
+    pub total_underlying: u128,
 
-    /// USDC currently deployed in JupLend Earn
-    pub jup_lend_balance: u64,
+    /// USDC currently not lent out — held in the vault’s ATA and idle.
+    pub unallocated_balance: u64,
 
-    /// USDC currently deployed in Kamino Earn
-    pub kamino_balance: u64,
+    
+    // Allocation Config
+    /// Amount of USDC currently deposited in JupLend
+    pub jup_lend_balance: u128,
 
-    // TODO : Will give the functionality to pause trades where we will take out the allocations are hold inside the account
-    /// Active or paused state 
-    pub is_active: bool,
+    /// Amount of USDC currently deposited in KaminoLend
+    pub kamino_balance: u128,
+
+    /// Last recorded value (snapshot) of JupLend allocation.
+    /// Used to measure performance (gain/loss) since last update.
+    pub last_jup_value: u128,
+
+    /// Last recorded value (snapshot) of KaminoLend allocation.
+    /// Used to measure performance (gain/loss) since last update.
+    pub last_kamino_value: u128,
+
+    /// Target allocation percentage 
+    pub jup_allocation: u16,    // e.g , 6000 = 60% -> For precision 61.34% = 6134
+    pub kamino_allocation: u16, // e.g , 4000 = 40%
+
+    /// Timestamp of the last yield update or rebalance action
+    pub last_update_ts: i64,
 
     pub bump: u8,
 }
