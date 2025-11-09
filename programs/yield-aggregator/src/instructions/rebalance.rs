@@ -39,7 +39,7 @@ pub struct Rebalance<'info> {
     /// Jup related accounts
     #[account(
         mut,
-        // constraint = main_vault.vault_usdc_ata.key() == main_vault_usdc_ata.key(), // We add this later
+        constraint = main_vault.vault_usdc_ata.key() == main_vault_usdc_ata.key(), // We add this later
         associated_token::mint=f_token_mint,
         associated_token::authority=main_vault,
         associated_token::token_program=token_program
@@ -129,13 +129,14 @@ pub struct Rebalance<'info> {
     // pub user_source_liquidity: UncheckedAccount<'info>,
 
     /// CHECK: User's (or PDA's) token account receiving collateral tokens
+    /// Kamino named this variable as user_destination_collateral
     #[account(
         mut,
         associated_token::mint=reserve_collateral_mint,
         associated_token::authority=main_vault,
         associated_token::token_program=token_program,
     )]
-    pub user_destination_collateral: InterfaceAccount<'info, TokenAccount>,
+    pub main_vault_kamino_token_ata_collateral: InterfaceAccount<'info, TokenAccount>,
 
     /// CHECK: Token program for the collateral mint (usually TOKEN_PROGRAM_ID)
     pub collateral_token_program: UncheckedAccount<'info>,
@@ -207,7 +208,7 @@ impl<'info> Rebalance<'info> {
             AccountMeta::new(self.reserve_liquidity_supply.key(), false),
             AccountMeta::new(self.reserve_collateral_mint.key(), false),
             AccountMeta::new(self.main_vault_usdc_ata.key(), false),
-            AccountMeta::new(self.user_destination_collateral.key(), false),
+            AccountMeta::new(self.main_vault_kamino_token_ata_collateral.key(), false),
             AccountMeta::new_readonly(self.collateral_token_program.key(), false),
             AccountMeta::new_readonly(self.liquidity_token_program.key(), false),
             AccountMeta::new_readonly(self.instruction_sysvar_account.key(), false),
@@ -228,7 +229,7 @@ impl<'info> Rebalance<'info> {
             self.reserve_liquidity_supply.to_account_info(),
             self.reserve_collateral_mint.to_account_info(),
             self.main_vault_usdc_ata.to_account_info(),
-            self.user_destination_collateral.to_account_info(),
+            self.main_vault_kamino_token_ata_collateral.to_account_info(),
             self.collateral_token_program.to_account_info(),
             self.liquidity_token_program.to_account_info(),
             self.instruction_sysvar_account.to_account_info(),
