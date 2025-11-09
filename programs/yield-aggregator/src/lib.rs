@@ -34,5 +34,10 @@ pub mod yield_aggregator {
         // Ok(())
     }
 
+    pub fn rebalance(ctx: Context<Rebalance>) -> Result<()> {
+        msg!("Running rebalance handler");
+        rebalance::handler(ctx)
+    }
+
 
 }

@@ -61,7 +61,7 @@ describe("yield-aggregator", () => {
     admin = anchor.web3.Keypair.generate();
     const airdropAdminTx = await airdropTo(
       admin.publicKey,
-      10,
+      1000,
       provider.connection
     );
     await confirmTx(airdropAdminTx, provider.connection);
@@ -98,10 +98,6 @@ describe("yield-aggregator", () => {
 
     [vaultPda] = anchor.web3.PublicKey.findProgramAddressSync(
       [Buffer.from("vault"), admin.publicKey.toBuffer()],
-      program.programId
-    );
-    [allocationConfigPda] = anchor.web3.PublicKey.findProgramAddressSync(
-      [Buffer.from("allocation_config"), admin.publicKey.toBuffer()],
       program.programId
     );
 
@@ -292,6 +288,68 @@ describe("yield-aggregator", () => {
     expect(vault.totalUnderlying.toNumber()).to.equal(firstDepositAmount + secondDepositAmount);
     expect(vault.unallocatedBalance.toNumber()).to.equal(firstDepositAmount + secondDepositAmount);
     expect(vault.accPerShare.toNumber()).to.equal(0);
+  });
+
+  it("Rebalancing with Jup and Kamino", async () => {
+    // Get Jup accounts
+    const { getDepositContext } = await import("@jup-ag/lend/earn");
+    const jupDepositContext = await getDepositContext({
+      asset: usdcMint,
+      connection: provider.connection,
+      signer: admin.publicKey, // using user to get static account addres
+    });
+
+    // Get Kamino accounts
+    const kaminoMainMarket = new anchor.web3.PublicKey("7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF");
+    const rpc = initRpc('https://api.mainnet-beta.solana.com');
+    const market = await KaminoMarket.load(rpc as any, kaminoMainMarket.toBase58() as Address, DEFAULT_RECENT_SLOT_DURATION_MS);
+    const reserve = market.getReserveByMint(usdcMint.toBase58() as Address);
+    const ixAccounts = await getDepositReserveLiquidityAccounts(admin.publicKey, reserve.address, kaminoMainMarket.toBase58() as Address, usdcMint.toBase58() as Address); // using admin as owner here, NOTE : we are not passing this objects userSourceLiquidity and userDestinationCollateral which is related to owner
+
+    // Check if vault USDC ATA exists and has USDC
+    const vaultUsdcAtaAccount = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+    expect(vaultUsdcAtaAccount.amount > BigInt(0)).to.be.true; // Should have USDC from deposits
+    console.log("main vulat USDC ATA : ", vaultUsdcAtaAccount.amount);
+
+    // Check if vault F-token ATA exists
+    const vaultFTokenAtaAccount = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
+    expect(vaultFTokenAtaAccount.owner.toBase58()).eq(vaultPda.toBase58())
+    expect(vaultFTokenAtaAccount.amount >= BigInt(0)).to.be.true; // Should exist, balance may be 0
+
+    // // Call rebalance
+    const tx = await program.methods
+      .rebalance()
+      .accounts({
+        admin: admin.publicKey,
+        usdcMint: usdcMint,
+        fTokenMint: jupDepositContext.fTokenMint,
+        lendingAdmin: jupDepositContext.lendingAdmin,
+        lending: jupDepositContext.lending,
+        supplyTokenReservesLiquidity: jupDepositContext.supplyTokenReservesLiquidity,
+        lendingSupplyPositionOnLiquidity: jupDepositContext.lendingSupplyPositionOnLiquidity,
+        rateModel: jupDepositContext.rateModel,
+        vault: jupDepositContext.vault,
+        liquidity: jupDepositContext.liquidity,
+        liquidityProgram: jupDepositContext.liquidityProgram,
+        rewardsRateModel: jupDepositContext.rewardsRateModel,
+        
+        reserve: ixAccounts.reserve,
+        lendingMarket: ixAccounts.lendingMarket,
+        lendingMarketAuthority: ixAccounts.lendingMarketAuthority,
+        reserveLiquiditySupply: ixAccounts.reserveLiquiditySupply,
+        reserveCollateralMint: ixAccounts.reserveCollateralMint,
+        // userDestinationCollateral: ixAccounts.userDestinationCollateral,
+        collateralTokenProgram: ixAccounts.collateralTokenProgram,
+        liquidityTokenProgram: ixAccounts.liquidityTokenProgram,
+        instructionSysvarAccount: ixAccounts.instructionSysvarAccount,
+        klendProgram: KLEND_PROGRAM_ID,
+
+        
+      })
+      .signers([admin])
+      .rpc({skipPreflight: true});
+
+    console.log("Rebalance transaction:", tx);
   });
 
   // it("Kamino lend call", async () => {
