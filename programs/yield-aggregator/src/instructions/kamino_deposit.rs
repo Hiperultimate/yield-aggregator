@@ -4,7 +4,7 @@ use anchor_spl::{associated_token::AssociatedToken, token::Token, token_interfac
 use crate::Vault;
 
 #[derive(Accounts)]
-pub struct DepositKamino<'info> {
+pub struct KaminoDeposit<'info> {
 
     #[account(mut)]
     pub admin: Signer<'info>,
@@ -87,7 +87,7 @@ pub fn get_deposit_reserve_liquidity_discriminator()-> Vec<u8> {
     vec![169, 201, 30, 126, 6, 205, 102, 68]
 }
 
-impl<'info> DepositKamino<'info> {
+impl<'info> KaminoDeposit<'info> {
     pub fn kamino_deposit(&mut self, deposited_amount : u64) -> Result<()>{
         let mut instruction_data = get_deposit_reserve_liquidity_discriminator();
         instruction_data.extend_from_slice(&deposited_amount.to_le_bytes());
@@ -137,7 +137,7 @@ impl<'info> DepositKamino<'info> {
     }
 }
 
-pub fn handler(ctx : Context<DepositKamino>, amount : u64) -> Result<()>{
+pub fn handler(ctx : Context<KaminoDeposit>, amount : u64) -> Result<()>{
     ctx.accounts.kamino_deposit(amount)?;
     Ok(())
 }

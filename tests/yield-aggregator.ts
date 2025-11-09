@@ -359,7 +359,7 @@ describe("yield-aggregator", () => {
 
     const depositAmount = new anchor.BN(50 * 10 ** 6); // 50 USDC
     const tx = await program.methods
-      .depositKamino(depositAmount)
+      .kaminoDeposit(depositAmount)
       .accounts({
         admin: admin.publicKey,
         usdcMint: usdcMint,
@@ -368,7 +368,6 @@ describe("yield-aggregator", () => {
         lendingMarketAuthority: ixAccounts.lendingMarketAuthority,
         reserveLiquiditySupply: ixAccounts.reserveLiquiditySupply,
         reserveCollateralMint: ixAccounts.reserveCollateralMint,
-        // userDestinationCollateral: ixAccounts.userDestinationCollateral,
         collateralTokenProgram: ixAccounts.collateralTokenProgram,
         liquidityTokenProgram: ixAccounts.liquidityTokenProgram,
         instructionSysvarAccount: ixAccounts.instructionSysvarAccount,
@@ -382,7 +381,7 @@ describe("yield-aggregator", () => {
     // Check balances after
     const vaultUsdcBalanceAfter = await getAccount(provider.connection, vaultUsdcAta, 'confirmed');
     console.log("User USDC balance after:", vaultUsdcBalanceAfter.amount);
-    expect(vaultUsdcBalanceAfter.amount).to.equal(vaultUsdcBalance.amount - BigInt(depositAmount.toNumber()));  // May be flaky
+    expect(vaultUsdcBalanceAfter.amount).to.equal(vaultUsdcBalance.amount - BigInt(depositAmount.toNumber()));
 
     // Check collateral tokens received
     const collateralAta = await getAccount(provider.connection, vaultKaminoAta, 'confirmed');

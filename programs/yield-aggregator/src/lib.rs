@@ -28,9 +28,9 @@ pub mod yield_aggregator {
         deposit::handler(ctx, amount)
     }
 
-    pub fn deposit_kamino(ctx : Context<DepositKamino>, amount : u64) -> Result<()>{
+    pub fn kamino_deposit(ctx : Context<KaminoDeposit>, amount : u64) -> Result<()>{
         msg!("Running kamino handler");
-        deposit_kamino::handler(ctx, amount)
+        kamino_deposit::handler(ctx, amount)
         // Ok(())
     }
 
