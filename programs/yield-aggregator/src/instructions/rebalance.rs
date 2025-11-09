@@ -247,12 +247,41 @@ impl<'info> Rebalance<'info> {
     pub fn rebalance(&mut self) -> Result<()> {
         // Rebalance logic here
         msg!("Rebalancing vault allocations");
+        
+        // check if this is the first time deposit by check both jup f-token and kamino token amount holdings == 0, if 0 allocate 50-50 to both platforms
+        // first time allocation
+        let main_vault_usdc = self.main_vault_usdc_ata.amount;
+        if self.main_vault_f_token_ata.amount == 0 
+            && self.main_vault_kamino_token_ata_collateral.amount == 0 
+            && self.main_vault_usdc_ata.amount > 0 {
+            
+            msg!("First time allocation -");
 
-        // lets hardcode deposit 50 USDC to each lending platforms, to check if they are working or not
-        self.jup_deposit(50000000)?;
-        msg!("Deposited jup");
-        self.kamino_deposit(50000000)?;
-        msg!("Deposited kamino");
+            self.main_vault.jup_allocation = 5000;
+            self.main_vault.kamino_allocation = 5000;
+
+            let add_half = main_vault_usdc
+                .checked_mul(5000)
+                .ok_or(ErrorCode::MathOverflow)?
+                .checked_div(10_000)
+                .ok_or(ErrorCode::MathOverflow)?;
+
+            msg!("Checking spread amount : {}", add_half);
+
+            self.jup_deposit(add_half)?;
+            self.kamino_deposit(add_half)?;
+
+            return Ok(())
+        }
+
+        // Check if rebalance is required or not
+        // how to check if rebalance is required or not?
+        // by checking which side has more profit increase and by how much
+        // then simply allocating some % amount there
+
+        // if yes, write rebalance logic + add distrubution logic to rebalancing amount for stored USDC inside main_vault
+        // if not, add lazy distribution logic of USDC in main_vault_usdc_ata accoridng to allocation % (need to confirm if that doesnt interefere with our rebalance logic)
+
         Ok(())
     }
 }

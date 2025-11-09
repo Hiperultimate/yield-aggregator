@@ -7,4 +7,7 @@ pub enum ErrorCode {
 
     #[msg("CPI_TO_LENDING_PROGRAM_FAILED")]
     CpiToLendingProgramFailed,
+
+    #[msg("MATH_OVERFLOW")]
+    MathOverflow
 }

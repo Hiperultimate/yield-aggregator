@@ -39,5 +39,10 @@ pub mod yield_aggregator {
         rebalance::handler(ctx)
     }
 
+    pub fn jup_deposit(ctx: Context<JupDeposit>, amount: u64) -> Result<()> {
+        msg!("Running jup deposit handler");
+        jup_deposit::handler(ctx, amount)
+    }
+
 
 }
