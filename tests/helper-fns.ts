@@ -1,3 +1,4 @@
+import * as anchor from "@coral-xyz/anchor";
 import { web3 } from "@coral-xyz/anchor";
 import { ASSOCIATED_TOKEN_PROGRAM_ID, getAssociatedTokenAddress, type Mint, TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import axios from "axios";
@@ -22,6 +23,44 @@ export const airdropTo = async (
   const tx = await connection.requestAirdrop(user, amount * web3.LAMPORTS_PER_SOL);
   return tx;
 };
+
+export async function convertUsdcToJupFTokenAmount(
+  fTokenMint: web3.PublicKey,
+  usdcAmount: anchor.BN, // in smallest units (e.g., 50 * 10^6 for 50 USDC)
+  connection: web3.Connection
+): Promise<anchor.BN> {
+  const { getLendingTokenDetails } = await import("@jup-ag/lend/earn");
+
+  const tokenDetails = await getLendingTokenDetails({ lendingToken: fTokenMint, connection });
+  const scale = new anchor.BN(10).pow(new anchor.BN(tokenDetails.decimals));
+  const fTokenAmount = usdcAmount.mul(tokenDetails.convertToShares).div(scale);
+
+  return fTokenAmount;
+}
+
+/*
+- convertToShares: A scaled BigNumber multiplier for converting underlying assets (e.g., USDC) 
+  to shares (jlTokens/f-tokens). Calculated as (totalSupply * 10^decimals) / totalAssets,
+  where decimals is the token's decimal places (typically 6). It ensures precise integer arithmetic for deposits.
+
+- convertToAssets: A scaled BigNumber multiplier for converting shares (jlTokens/f-tokens) to underlying 
+  assets (e.g., USDC). Calculated as (totalAssets * 10^decimals) / totalSupply. Used for withdrawals to get 
+  exact asset amounts.
+*/
+export async function convertJupFTokenToUsdcAmount(
+  fTokenMint: web3.PublicKey,
+  fTokenAmount: anchor.BN, // in smallest units (e.g., 49057229 for ~49.057 USDC worth)
+  connection: web3.Connection
+): Promise<anchor.BN> {
+  const { getLendingTokenDetails } = await import("@jup-ag/lend/earn");
+
+  const tokenDetails = await getLendingTokenDetails({ lendingToken: fTokenMint, connection });
+
+  const scale = new anchor.BN(10).pow(new anchor.BN(tokenDetails.decimals));
+  const usdcAmount = fTokenAmount.mul(tokenDetails.convertToAssets).div(scale);
+  
+  return usdcAmount;
+}
 
 export async function setUSDCViaCheatcode(
   receiverAddress: string,

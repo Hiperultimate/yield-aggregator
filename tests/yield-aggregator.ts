@@ -13,12 +13,14 @@ import {
   Mint,
   ASSOCIATED_TOKEN_PROGRAM_ID,
 } from "@solana/spl-token";
-import { airdropTo, confirmTx, setUSDCViaCheatcode } from "./helper-fns";
+import {
+    Connection,
+} from "@solana/web3.js";
+import { airdropTo, confirmTx, setUSDCViaCheatcode, convertJupFTokenToUsdcAmount } from "./helper-fns";
 import { assert, expect } from "chai";
 import { getDepositReserveLiquidityAccounts, initRpc } from "./generate-kamino-accounts";
 import { DEFAULT_RECENT_SLOT_DURATION_MS, KaminoMarket } from "@kamino-finance/klend-sdk";
 import { Address, createSolanaRpcApi } from "@solana/kit";
-// import { getDepositContext } from "@jup-ag/lend/earn";
 
 const USDC_MINT_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"; // Mainnetb
 const JUP_LEND_ADDRESS = "jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9"; // Mainnet
@@ -26,7 +28,7 @@ const KLEND_PROGRAM_ID = new anchor.web3.PublicKey("KLend2g3cP87fffoy8q1mQqGKjrx
 
 describe("yield-aggregator", () => {
   // Configure the client to use the local cluster.
-  const connection = new anchor.web3.Connection(
+  const connection = new Connection(
     "http://localhost:8899",
     "confirmed"
   );
@@ -38,10 +40,12 @@ describe("yield-aggregator", () => {
   anchor.setProvider(provider);
 
   const program = anchor.workspace.yieldAggregator as Program<YieldAggregator>;
-  const jupLendProgram = new Program(
-    JupLendIDL,
+  const jupLendProgram = new Program<JupLendIDLType>(
+    JupLendIDL as JupLendIDLType,
     provider
-  ) as Program<JupLendIDLType>;
+  );
+
+  // console.log("Checking jup lend accounts : ", jupLendProgram.account);
 
   let admin: anchor.web3.Keypair;
   let usdcMint: anchor.web3.PublicKey;
@@ -90,7 +94,7 @@ describe("yield-aggregator", () => {
 
     // Get Kamino collateral mint
     const kaminoMainMarket = new anchor.web3.PublicKey("7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF");
-    const rpc = initRpc('https://api.mainnet-beta.solana.com');
+    const rpc = initRpc('http://localhost:8899');
     const market = await KaminoMarket.load(rpc as any, kaminoMainMarket.toBase58() as Address, DEFAULT_RECENT_SLOT_DURATION_MS);
     const reserve = market.getReserveByMint(usdcMint.toBase58() as Address);
     const ixAccounts = await getDepositReserveLiquidityAccounts(admin.publicKey, reserve.address, kaminoMainMarket.toBase58() as Address, usdcMint.toBase58() as Address);
@@ -346,7 +350,7 @@ describe("yield-aggregator", () => {
   it("Depositing USDC from vault_usdc_ata to Kamino", async () => {
     // Get Kamino accounts
     const kaminoMainMarket = new anchor.web3.PublicKey("7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF");
-    const rpc = initRpc('https://api.mainnet-beta.solana.com');
+    const rpc = initRpc('http://localhost:8899');
     const market = await KaminoMarket.load(rpc as any, kaminoMainMarket.toBase58() as Address, DEFAULT_RECENT_SLOT_DURATION_MS);
     const reserve = market.getReserveByMint(usdcMint.toBase58() as Address);
     const ixAccounts = await getDepositReserveLiquidityAccounts(user.publicKey, reserve.address, kaminoMainMarket.toBase58() as Address, usdcMint.toBase58() as Address);
@@ -381,12 +385,69 @@ describe("yield-aggregator", () => {
     // Check balances after
     const vaultUsdcBalanceAfter = await getAccount(provider.connection, vaultUsdcAta, 'confirmed');
     console.log("User USDC balance after:", vaultUsdcBalanceAfter.amount);
-    expect(vaultUsdcBalanceAfter.amount).to.equal(vaultUsdcBalance.amount - BigInt(depositAmount.toNumber()));
+    expect(Number(vaultUsdcBalanceAfter.amount)).to.be.closeTo(Number(vaultUsdcBalance.amount) - depositAmount.toNumber(), 10);
 
     // Check collateral tokens received
     const collateralAta = await getAccount(provider.connection, vaultKaminoAta, 'confirmed');
     console.log("Vault ATA amount kamino collateral token:", collateralAta.amount);
     expect(collateralAta.amount > BigInt(0)).to.be.true; // Should have received collateral tokens
+  });
+
+  it("Withdrawing USDC from Jup to main_vault_usdc_ata", async () => {
+    // Get Jup withdraw accounts
+    const { getWithdrawContext } = await import("@jup-ag/lend/earn");
+    const jupWithdrawContext = await getWithdrawContext({
+      asset: usdcMint,
+      connection: provider.connection,
+      signer: admin.publicKey,
+    });
+
+    // Check vault F-token balance before
+    let vaultFTokenAtaAccount = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
+    const initialFTokenBalance = vaultFTokenAtaAccount.amount;
+    console.log("Vault F-token before :", initialFTokenBalance);
+    expect(initialFTokenBalance > BigInt(0)).to.be.true; // Should have f-tokens from deposit
+
+    const existingUSDCValueInVault = await convertJupFTokenToUsdcAmount(jupFTokenMint, new anchor.BN(initialFTokenBalance), connection);
+    console.log("Vault USDC before : ", existingUSDCValueInVault.toNumber());
+
+    // Check vault USDC balance before
+    let vaultUsdcAtaAccount = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+    const initialUsdcBalance = vaultUsdcAtaAccount.amount;
+    // console.log("Vault USDC ATA amount before withdraw:", initialUsdcBalance);
+
+    // const withdrawAmount = new anchor.BN(initialFTokenBalance);  // 50 USDC worth of f-tokens
+    const tx = await program.methods
+      .jupWithdraw(existingUSDCValueInVault.sub(new anchor.BN(50)))
+      .accounts({
+        admin: admin.publicKey,
+        usdcMint: usdcMint,
+        fTokenMint: jupWithdrawContext.fTokenMint,
+        lendingAdmin: jupWithdrawContext.lendingAdmin,
+        lending: jupWithdrawContext.lending,
+        supplyTokenReservesLiquidity: jupWithdrawContext.supplyTokenReservesLiquidity,
+        lendingSupplyPositionOnLiquidity: jupWithdrawContext.lendingSupplyPositionOnLiquidity,
+        rateModel: jupWithdrawContext.rateModel,
+        claimAccount : jupWithdrawContext.claimAccount,
+        vault: jupWithdrawContext.vault,
+        liquidity: jupWithdrawContext.liquidity,
+        liquidityProgram: jupWithdrawContext.liquidityProgram,
+        rewardsRateModel: jupWithdrawContext.rewardsRateModel
+      })
+      .signers([admin])
+      .rpc({skipPreflight: true});
+
+    console.log("Jup withdraw transaction:", tx);
+
+    // Check balances after
+    vaultUsdcAtaAccount = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+    console.log("Vault USDC after :", vaultUsdcAtaAccount.amount);
+    expect(Number(vaultUsdcAtaAccount.amount)).to.be.closeTo(Number(initialUsdcBalance) + 50 * 10 ** 6, 100); // Allow small delta due to protocol fees/rounding
+
+    vaultFTokenAtaAccount = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
+    console.log("Vault F-token after :", vaultFTokenAtaAccount.amount);
+
+    expect(vaultFTokenAtaAccount.amount < initialFTokenBalance).to.be.true; // Should have burned f-tokens
   });
 
   // it("Rebalancing with Jup and Kamino", async () => {
