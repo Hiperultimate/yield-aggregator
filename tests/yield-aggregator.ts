@@ -393,6 +393,56 @@ describe("yield-aggregator", () => {
     expect(collateralAta.amount > BigInt(0)).to.be.true; // Should have received collateral tokens
   });
 
+  it("Withdrawing USDC from vault_kamino_ata to Kamino", async () => {
+    // Get Kamino accounts
+    const kaminoMainMarket = new anchor.web3.PublicKey("7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF");
+    const rpc = initRpc('http://localhost:8899');
+    const market = await KaminoMarket.load(rpc as any, kaminoMainMarket.toBase58() as Address, DEFAULT_RECENT_SLOT_DURATION_MS);
+    const reserve = market.getReserveByMint(usdcMint.toBase58() as Address);
+    const ixAccounts = await getDepositReserveLiquidityAccounts(admin.publicKey, reserve.address, kaminoMainMarket.toBase58() as Address, usdcMint.toBase58() as Address);
+    const vaultKaminoAta = await getAssociatedTokenAddress(new anchor.web3.PublicKey(ixAccounts.reserveCollateralMint), vaultPda, true);
+
+    // Check collateral balance before
+    const collateralAtaBefore = await getAccount(provider.connection, vaultKaminoAta, 'confirmed');
+    console.log("Vault collateral before withdraw:", collateralAtaBefore.amount);
+    expect(collateralAtaBefore.amount > BigInt(0)).to.be.true;
+
+    // Check vault USDC balance before
+    const vaultUsdcBalanceBefore = await getAccount(provider.connection, vaultUsdcAta, 'confirmed');
+    console.log("Vault USDC before withdraw:", vaultUsdcBalanceBefore.amount);
+
+    // Withdraw all collateral tokens
+    const withdrawAmount = new anchor.BN(collateralAtaBefore.amount.toString());
+    const tx = await program.methods
+      .kaminoWithdraw(withdrawAmount)
+      .accounts({
+        admin: admin.publicKey,
+        usdcMint: usdcMint,
+        reserve: ixAccounts.reserve,
+        lendingMarket: ixAccounts.lendingMarket,
+        lendingMarketAuthority: ixAccounts.lendingMarketAuthority,
+        reserveLiquiditySupply: ixAccounts.reserveLiquiditySupply,
+        reserveCollateralMint: ixAccounts.reserveCollateralMint,
+        collateralTokenProgram: ixAccounts.collateralTokenProgram,
+        liquidityTokenProgram: ixAccounts.liquidityTokenProgram,
+        instructionSysvarAccount: ixAccounts.instructionSysvarAccount,
+        klendProgram: KLEND_PROGRAM_ID,
+      })
+      .signers([admin])
+      .rpc({skipPreflight: true});
+
+    console.log("Kamino withdraw transaction:", tx);
+
+    // Check balances after
+    const vaultUsdcBalanceAfter = await getAccount(provider.connection, vaultUsdcAta, 'confirmed');
+    console.log("Vault USDC after withdraw:", vaultUsdcBalanceAfter.amount);
+    expect(vaultUsdcBalanceAfter.amount > vaultUsdcBalanceBefore.amount).to.be.true; // Should have received USDC
+
+    const collateralAtaAfter = await getAccount(provider.connection, vaultKaminoAta, 'confirmed');
+    console.log("Vault collateral after withdraw:", collateralAtaAfter.amount);
+    expect(collateralAtaAfter.amount).to.equal(BigInt(0)); // Should have burned all collateral
+  });
+
   it("Withdrawing USDC from Jup to main_vault_usdc_ata", async () => {
     // Get Jup withdraw accounts
     const { getWithdrawContext } = await import("@jup-ag/lend/earn");
