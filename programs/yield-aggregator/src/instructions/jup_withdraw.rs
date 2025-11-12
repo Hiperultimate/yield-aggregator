@@ -107,7 +107,7 @@ impl<'info> JupWithdraw<'info> {
         msg!("Withdrawing funds from JUP");
         // withdraw(amount) = you tell it how many assets (e.g. USDC) you want back.
         // redeem(shares) = you tell it how many f-tokens (shares) you want to burn.
-        let jup_accounts = jup_accounts::Withdraw{
+        let jup_accounts = jup_accounts::Redeem{
             signer: self.main_vault.to_account_info() ,
             owner_token_account: self.main_vault_f_token_ata.to_account_info(),
             recipient_token_account: self.main_vault_usdc_ata.to_account_info(),
@@ -135,7 +135,7 @@ impl<'info> JupWithdraw<'info> {
 
         let jup_cpi_program = self.lending_program.to_account_info();
         let jup_cpi_context = CpiContext::new_with_signer(jup_cpi_program, jup_accounts, signer_seeds);
-        match jup_cpi::withdraw(jup_cpi_context, withdraw_amount){
+        match jup_cpi::redeem(jup_cpi_context, withdraw_amount){
             Ok(_) => Ok(()),
             Err(_) => Err(ErrorCode::CpiToLendingProgramFailed.into())
         }

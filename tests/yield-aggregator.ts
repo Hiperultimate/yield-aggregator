@@ -453,17 +453,17 @@ describe("Yield aggregator instruction tests", () => {
     console.log("Vault F-token before :", initialFTokenBalance);
     expect(initialFTokenBalance > BigInt(0)).to.be.true; // Should have f-tokens from deposit
 
-    const existingUSDCValueInVault = await convertJupFTokenToUsdcAmount(jupFTokenMint, new anchor.BN(initialFTokenBalance), connection);
-    console.log("Vault USDC before : ", existingUSDCValueInVault.toNumber());
+    // const existingUSDCValueInVault = await convertJupFTokenToUsdcAmount(jupFTokenMint, new anchor.BN(initialFTokenBalance), connection);
+    // console.log("Vault USDC before : ", existingUSDCValueInVault.toNumber());
 
     // Check vault USDC balance before
     let vaultUsdcAtaAccount = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
     const initialUsdcBalance = vaultUsdcAtaAccount.amount;
     // console.log("Vault USDC ATA amount before withdraw:", initialUsdcBalance);
 
-    // const withdrawAmount = new anchor.BN(initialFTokenBalance);  // 50 USDC worth of f-tokens
+    const withdrawAmount = new anchor.BN(initialFTokenBalance);  // 50 USDC worth of f-tokens
     const tx = await program.methods
-      .jupWithdraw(existingUSDCValueInVault.sub(new anchor.BN(50)))
+      .jupWithdraw(withdrawAmount)
       .accounts({
         admin: admin.publicKey,
         usdcMint: usdcMint,
@@ -487,7 +487,7 @@ describe("Yield aggregator instruction tests", () => {
     // Check balances after
     vaultUsdcAtaAccount = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
     console.log("Vault USDC after :", vaultUsdcAtaAccount.amount);
-    expect(Number(vaultUsdcAtaAccount.amount)).to.be.closeTo(Number(initialUsdcBalance) + 50 * 10 ** 6, 100); // Allow small delta due to protocol fees/rounding
+    expect(Number(vaultUsdcAtaAccount.amount)).to.be.closeTo(Number(initialUsdcBalance) + 50 * 10 ** 6, 5); // Allow small delta due to protocol fees/rounding
 
     vaultFTokenAtaAccount = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
     console.log("Vault F-token after :", vaultFTokenAtaAccount.amount);
@@ -496,7 +496,18 @@ describe("Yield aggregator instruction tests", () => {
   });
 
 
-  // TODO : Remove below code after completion
+
+
+
+
+
+
+
+
+
+
+
+  // TODO : Remove below code after completion, ONLY HERE FOR LOOKUP
   // Old tests, may require as a lookup in future
   // it("Rebalancing with Jup and Kamino", async () => {
   //   // Get Jup accounts
