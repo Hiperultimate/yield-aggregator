@@ -72,5 +72,9 @@ pub mod yield_aggregator {
         jup_withdraw::handler(ctx, amount)
     }
 
+    pub fn withdraw(ctx: Context<Withdraw>, amount: u64) -> Result<()> {
+        msg!("Running withdraw handler");
+        withdraw::handler(ctx, amount)
+    }
 
 }
