@@ -16,17 +16,17 @@ import {
 import {
     Connection,
 } from "@solana/web3.js";
-import { airdropTo, confirmTx, setUSDCViaCheatcode, convertJupFTokenToUsdcAmount } from "./helper-fns";
+import { airdropTo, confirmTx, setUSDCViaCheatcode, convertJupFTokenToUsdcAmount, convertKaminoTokenToUsdcAmount, getThresholdAmount } from "../client_utility/helper-fns";
 import { assert, expect } from "chai";
-import { getDepositReserveLiquidityAccounts, initRpc } from "./generate-kamino-accounts";
+import { getDepositReserveLiquidityAccounts, initRpc } from "../client_utility/generate-kamino-accounts";
 import { DEFAULT_RECENT_SLOT_DURATION_MS, KaminoMarket } from "@kamino-finance/klend-sdk";
-import { Address, createSolanaRpcApi } from "@solana/kit";
+import { Address } from "@solana/kit";
 
 const USDC_MINT_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"; // Mainnetb
 const JUP_LEND_ADDRESS = "jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9"; // Mainnet
 const KLEND_PROGRAM_ID = new anchor.web3.PublicKey("KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD") as any;
 
-describe("yield-aggregator", () => {
+describe("Yield aggregator instruction tests", () => {
   // Configure the client to use the local cluster.
   const connection = new Connection(
     "http://localhost:8899",
@@ -44,8 +44,6 @@ describe("yield-aggregator", () => {
     JupLendIDL as JupLendIDLType,
     provider
   );
-
-  // console.log("Checking jup lend accounts : ", jupLendProgram.account);
 
   let admin: anchor.web3.Keypair;
   let usdcMint: anchor.web3.PublicKey;
@@ -201,7 +199,6 @@ describe("yield-aggregator", () => {
     assert(vaultAccount.totalShares.eq(new anchor.BN(0)));
     assert(vaultAccount.accPerShare.eq(new anchor.BN(0)));
     assert(vaultAccount.totalUnderlying.eq(new anchor.BN(0)));
-    assert.equal(vaultAccount.unallocatedBalance.toNumber(), 0);
     assert(vaultAccount.jupLendBalance.eq(new anchor.BN(0)));
     assert(vaultAccount.kaminoBalance.eq(new anchor.BN(0)));
     assert(vaultAccount.lastJupValue.eq(new anchor.BN(0)));
@@ -253,7 +250,6 @@ describe("yield-aggregator", () => {
     let vault = await program.account.vault.fetch(vaultPda);
     expect(vault.totalShares.toNumber()).to.equal(firstDepositAmount);
     expect(vault.totalUnderlying.toNumber()).to.equal(firstDepositAmount);
-    expect(vault.unallocatedBalance.toNumber()).to.equal(firstDepositAmount);
     expect(vault.accPerShare.toNumber()).to.equal(0);
 
     // Second deposit (existing user position)
@@ -290,7 +286,6 @@ describe("yield-aggregator", () => {
     vault = await program.account.vault.fetch(vaultPda);
     expect(vault.totalShares.toNumber()).to.equal(firstDepositAmount + secondDepositAmount);
     expect(vault.totalUnderlying.toNumber()).to.equal(firstDepositAmount + secondDepositAmount);
-    expect(vault.unallocatedBalance.toNumber()).to.equal(firstDepositAmount + secondDepositAmount);
     expect(vault.accPerShare.toNumber()).to.equal(0);
   });
 
@@ -500,6 +495,9 @@ describe("yield-aggregator", () => {
     expect(vaultFTokenAtaAccount.amount < initialFTokenBalance).to.be.true; // Should have burned f-tokens
   });
 
+
+  // TODO : Remove below code after completion
+  // Old tests, may require as a lookup in future
   // it("Rebalancing with Jup and Kamino", async () => {
   //   // Get Jup accounts
   //   const { getDepositContext } = await import("@jup-ag/lend/earn");

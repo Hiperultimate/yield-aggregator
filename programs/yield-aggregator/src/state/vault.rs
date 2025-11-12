@@ -26,9 +26,6 @@ pub struct Vault {
     /// Includes allocations in JupLend, Kamino, and unallocated USDC sitting in the vault.
     pub total_underlying: u64,
 
-    /// USDC currently not lent out — held in the vault’s ATA and idle.
-    pub unallocated_balance: u64,
-
     
     // Allocation Config
     /// Amount of USDC currently deposited in JupLend
@@ -39,10 +36,12 @@ pub struct Vault {
 
     /// Last recorded value (snapshot) of JupLend allocation.
     /// Used to measure performance (gain/loss) since last update.
+    /// Values stored in terms of USDC
     pub last_jup_value: u64,
 
     /// Last recorded value (snapshot) of KaminoLend allocation.
     /// Used to measure performance (gain/loss) since last update.
+    /// Values stored in terms of USDC
     pub last_kamino_value: u64,
 
     /// Target allocation percentage 

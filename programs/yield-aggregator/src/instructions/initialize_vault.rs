@@ -77,7 +77,6 @@ impl<'info> InitializeVault<'info> {
         self.vault.total_shares = 0;
         self.vault.acc_per_share = 0;
         self.vault.total_underlying = 0;
-        self.vault.unallocated_balance = 0;
         self.vault.jup_lend_balance = 0;
         self.vault.kamino_balance = 0;
         self.vault.last_jup_value = 0;

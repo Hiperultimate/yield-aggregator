@@ -39,9 +39,27 @@ pub mod yield_aggregator {
         kamino_withdraw::handler(ctx, amount)
     }
 
-    pub fn rebalance(ctx: Context<Rebalance>) -> Result<()> {
-        msg!("Running rebalance handler");
-        rebalance::handler(ctx)
+    pub fn sync_vault_state(
+        ctx: Context<SyncVaultState>,
+        new_jup_allocation : u16,
+        new_kamino_allocation : u16,
+        new_jup_lend_balance : u64,
+        new_kamino_balance : u64,
+        new_acc_per_share: u64,
+        new_total_underlying: u64,
+        new_jup_value: u64,
+        new_kamino_value: u64,
+    ) -> Result<()> {
+        sync_vault_state::handler(ctx, 
+            new_jup_allocation,
+            new_kamino_allocation,
+            new_jup_lend_balance,
+            new_kamino_balance,
+            new_acc_per_share,
+            new_total_underlying,
+            new_jup_value,
+            new_kamino_value,
+        )
     }
 
     pub fn jup_deposit(ctx: Context<JupDeposit>, amount: u64) -> Result<()> {

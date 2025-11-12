@@ -77,7 +77,6 @@ impl<'info> Deposit<'info> {
         }
 
         self.vault.total_underlying += amount;
-        self.vault.unallocated_balance += amount;
         self.vault.total_shares += amount;
         self.user_position.last_updated = current_time;
 
