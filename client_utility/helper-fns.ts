@@ -53,6 +53,7 @@ export async function convertUsdcToJupFTokenAmount(
   assets (e.g., USDC). Calculated as (totalAssets * 10^decimals) / totalSupply. Used for withdrawals to get 
   exact asset amounts.
 */
+// TODO : we are dropping withdraw for redeem. We will now have to add a new funtion to convert USDC to f-token instead and burn that f-token amount which is safer
 export async function convertJupFTokenToUsdcAmount(
   fTokenMint: web3.PublicKey,
   fTokenAmount: anchor.BN, // in smallest units (e.g., 49057229 for ~49.057 USDC worth)
@@ -137,7 +138,13 @@ export function getThresholdAmount({
 }: {
   increaseInJupPercent: BN,
   increaseInKaminoPercent: BN,
-}){
+}) : {
+    needsRebalance : true,
+    JUP: number,
+    KAMINO: number,
+  } | {
+    needsRebalance : false
+  }{
   const thresholdDiff = BN.max(increaseInJupPercent, increaseInKaminoPercent).sub(BN.min(increaseInJupPercent, increaseInKaminoPercent)); // returns something like 060, 123, 302 => 0.6 %, 1.23 %, 3.02%
   
   const thresholdNums = Object.keys(allocationDistributionChart).map(i => Number(i)).sort((a,b) => b-a);

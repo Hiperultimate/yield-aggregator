@@ -56,7 +56,7 @@ impl<'info> Deposit<'info> {
             // Initialize user position if needed
             self.user_position.user = self.user.key();
             self.user_position.vault = self.vault.key();
-            self.user_position.shares = amount;
+            // self.user_position.shares = amount;
             self.user_position.reward_debt = (amount as u128) * (self.vault.acc_per_share as u128);
             self.user_position.pending_rewards = 0;
             self.user_position.last_updated = current_time;
@@ -70,14 +70,28 @@ impl<'info> Deposit<'info> {
             self.user_position.pending_rewards = self.user_position.pending_rewards.checked_add(pending as u64).unwrap();
 
             // Update shares & reward checkpoint
-            self.user_position.shares = self.user_position.shares.checked_add(amount).unwrap();
+            // self.user_position.shares = self.user_position.shares.checked_add(amount).unwrap();
             self.user_position.reward_debt = (self.user_position.shares as u128)
                 .checked_mul(self.vault.acc_per_share as u128)
                 .unwrap();
         }
 
-        self.vault.total_underlying += amount;
-        self.vault.total_shares += amount;
+        let shares_to_mint = if self.vault.total_shares == 0 || self.vault.total_underlying == 0 {
+            // first depositor -> 1 share = 1 USDC
+            amount
+        } else {
+            // proportional share 
+            (amount as u128)
+                .checked_mul(self.vault.total_shares as u128)
+                .unwrap()
+                .checked_div(self.vault.total_underlying as u128)
+                .unwrap() as u64
+        };
+
+        self.user_position.shares = self.user_position.shares.checked_add(shares_to_mint).unwrap();
+        self.vault.total_shares = self.vault.total_shares.checked_add(shares_to_mint).unwrap();
+        // Update vault underlying
+        self.vault.total_underlying = self.vault.total_underlying.checked_add(amount).unwrap();
         self.user_position.last_updated = current_time;
 
         Ok(())
