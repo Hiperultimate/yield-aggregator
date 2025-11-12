@@ -1,5 +1,5 @@
 import { getAssociatedTokenAddress } from '@solana/spl-token';
-import { DepositReserveLiquidityAccounts, lendingMarketAuthPda, reserveCollateralMintPda, reserveCollateralSupplyPda, reserveLiqSupplyPda } from '@kamino-finance/klend-sdk';
+import { lendingMarketAuthPda, reserveCollateralMintPda, reserveCollateralSupplyPda, reserveLiqSupplyPda } from '@kamino-finance/klend-sdk';
 import * as anchor from "@coral-xyz/anchor";
 
 import {
