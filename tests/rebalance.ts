@@ -324,5 +324,47 @@ describe("Rebalacing tests", () => {
 
     const vaultUSDCAtaDetails = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
     expect(new BN(vaultUSDCAtaDetails.amount).sub(new BN(100_000_000)).abs().lte(new BN(100)));
+  });
+
+  it("Rebalancing for the second time after user deposits some more USDC to check for lazy balancing", async () => {
+    // minting 100 USDC to user
+    const usdcMintDetails = await getMint(provider.connection, usdcMint, "confirmed");
+    await setUSDCViaCheatcode(user.publicKey.toString(), 100, usdcMintDetails);
+
+    // User makes their second deposit
+    let tx = await program.methods
+      .deposit(new anchor.BN(100 * 10 ** usdcMintDetails.decimals))
+      .accounts({
+        user: user.publicKey,
+        vault: vaultPda,
+        usdcMint: usdcMint,
+        tokenProgram: TOKEN_PROGRAM_ID,
+      })
+      .signers([user])
+      .rpc();
+    
+    console.log("User depositing their USDC to the protocol : ", tx);
+
+    await invokeRebalance(program, provider, {
+      admin : admin, 
+      usdcMint : usdcMint, 
+      jupFTokenMint : jupFTokenMint, 
+      vaultPda : vaultPda, 
+      vaultUsdcAta : vaultUsdcAta, 
+      vaultFTokenAta : vaultFTokenAta, 
+      vaultKaminoTokenAta : vaultKaminoTokenAta, 
+    });
+
+    const vaultUSDCAtaDetails = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+    expect(Number(vaultUSDCAtaDetails.amount)).to.be.closeTo(0, 100);
+
+    const vaultJupAtaDetails = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
+    const vaultKaminoAtaDetails = await getAccount(provider.connection, vaultKaminoTokenAta, "confirmed");
+
+    const jupAmountInUSDC = await convertJupFTokenToUsdcAmount(jupFTokenMint, new BN(vaultJupAtaDetails.amount), provider.connection);
+    const kaminoAmountInUSDC = await convertKaminoTokenToUsdcAmount(new BN(vaultKaminoAtaDetails.amount), {usdcMint, admin : admin.publicKey, vaultPda});
+
+    expect(jupAmountInUSDC.sub(new BN(100_000_000)).abs().lte(new BN(500))).to.be.true
+    expect(kaminoAmountInUSDC.sub(new BN(100_000_000)).abs().lte(new BN(500))).to.be.true
   })
 })
