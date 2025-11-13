@@ -22,14 +22,9 @@ import { assert, expect } from "chai";
 import { getDepositReserveLiquidityAccounts, initRpc } from "../client_utility/generate-kamino-accounts";
 import { DEFAULT_RECENT_SLOT_DURATION_MS, KaminoMarket } from "@kamino-finance/klend-sdk";
 import { Address } from "@solana/kit";
-import { jupDeposit } from "../client_utility/instructionCalls/jupDeposit";
-import { kaminoDeposit } from "../client_utility/instructionCalls/kaminoDeposit";
-import { jupWithdraw } from "../client_utility/instructionCalls/jupWithdraw";
-import { kaminoWithdraw } from "../client_utility/instructionCalls/kaminoWithdraw";
+import { invokeRebalance } from "../client_utility/invokeRebalance";
 
 const USDC_MINT_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"; // Mainnet
-const JUP_LEND_ADDRESS = "jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9"; // Mainnet
-const KLEND_PROGRAM_ID = new anchor.web3.PublicKey("KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD") as any;
 
 
 describe("Rebalacing tests", () => {
@@ -297,265 +292,37 @@ describe("Rebalacing tests", () => {
     expect(vault.accPerShare.toNumber()).to.equal(0);
   });
 
-  it("Rebalancing USDC to jup and kamino", async () => {
-    // TODO : pull this logic to a folder where we are writing the bot 
-
+  it("Rebalancing USDC to jup and kamino for the first time", async () => {
     // access vault data
-    const previousVaultStates = await program.account.vault.fetch(vaultPda, "confirmed");
-    let vaultUsdcAtaDetails = await getAccount(provider.connection, vaultUsdcAta);
-    let vaultJupAtaDetails = await getAccount(provider.connection, vaultFTokenAta);
-    let vaultKaminoAtaDetails = await getAccount(provider.connection, vaultKaminoTokenAta);
+    await invokeRebalance(program, provider, {
+      admin : admin, 
+      usdcMint : usdcMint, 
+      jupFTokenMint : jupFTokenMint, 
+      vaultPda : vaultPda, 
+      vaultUsdcAta : vaultUsdcAta, 
+      vaultFTokenAta : vaultFTokenAta, 
+      vaultKaminoTokenAta : vaultKaminoTokenAta, 
+    })
     
-    const vaultUsdcAtaBalance = new anchor.BN(vaultUsdcAtaDetails.amount); 
-    const vaultJupAtaBalance = new anchor.BN(vaultJupAtaDetails.amount);
-    const vaultKaminoAtaBalance = new anchor.BN(vaultKaminoAtaDetails.amount);
+    // get vault states
+    const vaultState = await program.account.vault.fetch(vaultPda, "confirmed");
+    // Expect allocation to be 50-50
+    expect(vaultState.jupAllocation).eq(5000);
+    expect(vaultState.kaminoAllocation).eq(5000);
 
-    // check if this is the first time deposit by check both jup f-token and kamino token amount holdings == 0, if 0 allocate 50-50 to both platforms
-    // first time allocation
-    if (
-      vaultJupAtaBalance.eq(new anchor.BN(0)) 
-      && vaultKaminoAtaBalance.eq(new anchor.BN(0)) 
-      && vaultUsdcAtaBalance.gt(new anchor.BN(0))
-    ){
-      console.log("Running first time allocation...");
-      // Save these in vault states 
-      const jupAllocation = new anchor.BN(5000);
-      const kaminoAllocation = new BN(5000);
+    // Expect price distributed to be 50-50
+    const vaultJupAtaDetails = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
+    const vaultKaminoAtaDetails = await getAccount(provider.connection, vaultKaminoTokenAta, "confirmed");
 
-      let addHalf = vaultUsdcAtaBalance.mul(new BN(5000)).div(new BN(10000));
-      console.log("Adding this amount to Jup and Kamino :", addHalf.toString());
-
-      const jupTx = await jupDeposit(program, provider, addHalf, { admin, usdcMint });
-      const kamTx = await kaminoDeposit(program, addHalf, { admin, usdcMint });
-      console.log("Jup TX : ", jupTx);
-      console.log("Kamino TX :", kamTx);
-
-      const updateVaultStates = await program.methods
-        .syncVaultState(
-          jupAllocation.toNumber(), // new_jup_allocation
-          kaminoAllocation.toNumber(), // new_kamino_allocation
-          addHalf, // new_jup_lend_balance
-          addHalf, // new_kamino_balance
-          new BN(0), // new_acc_per_share
-          vaultUsdcAtaBalance, // new_total_underlying
-          addHalf, // new_jup_value
-          addHalf, // new_kamino_value
-        )
-        .accounts({
-          admin: admin.publicKey
-        })
-        .signers([admin])
-        .rpc();
-
-      console.log("Rebalance completed, vault state updated :", updateVaultStates);
-    } else {
-    // }
-    //   if(true){ // TODO: remove this line; this is for testing purposes only
-
-      // n-th time allocation
-      // Check if we need rebalacing
-      //  check percent increase in both platforms
-      //  if they exceed some percent amount, we perform rebalance or else chill
-      // if we need total rebalancing, write rebalance logic + add distrubution logic to rebalancing amount for stored USDC inside main_vault
-      // if no rebalancing is required, add lazy distribution logic of USDC in main_vault_usdc_ata accoridng to allocation % (need to confirm if that doesnt interefere with our rebalance logic), will have to update last_jup_value, last_kamino_value according to how much we are pushing in each
-
-      const lastJupValue = previousVaultStates.lastJupValue;
-      const lastKaminoValue = previousVaultStates.lastKaminoValue;
-      // TODO: Remove below values and uncomment above two lines
-      // const lastJupValue = new BN(48500000) // test values
-      // const lastKaminoValue = new BN(49700000) // test
-      
-      vaultJupAtaDetails = await getAccount(provider.connection, vaultFTokenAta); // Updating with the latest deposited amount
-      vaultKaminoAtaDetails = await getAccount(provider.connection, vaultKaminoTokenAta);
-
-      const oldJupUSDCValue = await convertJupFTokenToUsdcAmount(jupFTokenMint, new BN(vaultJupAtaDetails.amount), provider.connection);
-      const oldKaminoUSDCValue = await convertKaminoTokenToUsdcAmount(
-        new BN(vaultKaminoAtaDetails.amount),
-        {
-        usdcMint,
-        admin: admin.publicKey,
-        vaultPda
-        }
-      )
-
-      // calculate how much % increase is going on in either platform
-      // we also have to check that the value is greater than 10000000
-      const jupDiff = oldJupUSDCValue.sub(lastJupValue);
-      let increaseInJup = new BN(0); // init variable 0% -> 157
-      console.log("Checking values :", jupDiff.toString(), oldJupUSDCValue.toString(), lastJupValue.toString());
-      if(!jupDiff.eq(new BN(0))){
-        increaseInJup = jupDiff.mul(new BN(10000)).div(lastJupValue);
-        // if increaseInJup > 100 i.e. increaseInJup > 1 % and so on...
-      }
-      console.log("Checking jup diff : ", oldJupUSDCValue.toString(), lastKaminoValue.toString(), jupDiff.toString());
-      console.log("Checking increase in jup percent value : ", increaseInJup.toString());
-
-      const kamDiff = oldKaminoUSDCValue.sub(lastKaminoValue);
-      let increaseInKam = new BN(0);  // init with 0 %
-      if(!kamDiff.eq(new BN(0))){
-        increaseInKam = kamDiff.mul(new BN(10000)).div(lastKaminoValue);
-      }
-      console.log("Checking kam diff :", oldKaminoUSDCValue.toString(), lastKaminoValue.toString(), kamDiff.toString());
-      console.log("Checking increase in kamino percent value : ", increaseInKam.toString());
-
-      const getThresholdRequirement = getThresholdAmount({
-        increaseInJupPercent : increaseInJup, 
-        increaseInKaminoPercent: increaseInKam
-      });
-
-      // We are performing lazy balancing separately here to save transaction costs
-      if(getThresholdRequirement.needsRebalance === true){
-        console.log("Checking threhshold function : ", getThresholdRequirement);
-        // add rebalancing logic here
-        const newJupAllocation = getThresholdRequirement.JUP;
-        const newKaminoAllocation = getThresholdRequirement.KAMINO;
-        const SCALE = 10_000; // 100% = 10_000%
-
-        // get current vaultJupAtaBalance and vaultKaminoAtaBalance 
-        vaultJupAtaDetails = await getAccount(provider.connection, vaultFTokenAta);
-        vaultKaminoAtaDetails = await getAccount(provider.connection, vaultKaminoTokenAta);
-
-        console.log("Current jup vault amount : ", vaultJupAtaDetails.amount.toString());
-        // const existingUSDCValueInJupVault = await convertJupFTokenToUsdcAmount(jupFTokenMint, new anchor.BN(vaultJupAtaDetails.amount), connection);
-        // console.log("Trying to withdraw from jup amount : ", existingUSDCValueInJupVault.toString());
-        // get all funds from jup and kamino using jup_withdraw and kamino_withdraw
-        await jupWithdraw(program, provider, new BN(vaultJupAtaDetails.amount), { admin, usdcMint });
-        await kaminoWithdraw(program, new BN(vaultKaminoAtaDetails.amount), { admin, usdcMint });
-
-        // Check if we have all the program vault 
-        let mainVaultUSDCAtaDetails = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
-        const totalUnderlyingValue = new BN(mainVaultUSDCAtaDetails.amount);
-        const totalCurrentValue = mainVaultUSDCAtaDetails.amount;
-        console.log("Checking main vault USDC amount  : ", mainVaultUSDCAtaDetails.amount.toString());
-        
-        // multiply their value by allocation
-        const newJupAllocatedValue = new BN(mainVaultUSDCAtaDetails.amount).mul(new BN(newJupAllocation)).div(new BN(SCALE));
-        const newKaminoAllocatedValue = new BN(mainVaultUSDCAtaDetails.amount).mul(new BN(newKaminoAllocation)).div(new BN(SCALE));
-        console.log("Checking transfer balance before submission : ", newJupAllocatedValue.toString(), newKaminoAllocatedValue.toString());
-        // Dont have to lazy allocate because everything goes into the same vault whenever user deposits 
-        
-        // use jup_deposit and kamino_deposit to allocate those funds
-        await jupDeposit(program, provider, newJupAllocatedValue, { admin , usdcMint });
-        await kaminoDeposit(program, newKaminoAllocatedValue, {admin, usdcMint});
-
-        // Check if both jup and kamino ATA got their data and USDC is now empty
-        mainVaultUSDCAtaDetails = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
-        // console.log("Checking main vault USDC (SHOULD BE EMPTY)  : ", mainVaultUSDCAtaDetails.amount.toString());
-        
-        vaultJupAtaDetails = await getAccount(provider.connection, vaultFTokenAta);
-        vaultKaminoAtaDetails = await getAccount(provider.connection, vaultKaminoTokenAta);
-        console.log("JUP Details should have half :" , vaultJupAtaDetails.amount.toString());
-        console.log("KAMINO Details should have half :" , vaultKaminoAtaDetails.amount.toString());
-
-
-        const SCALER = new BN(1_000_000_000); // 1e9 for temporary fixed-point math
-        const SCALE_DOWN = new BN(1_000_000); // reduce before writing to u64 on-chain
-
-        // update states
-        const newTotalUnderlying = totalUnderlyingValue;
-        const totalPreviousValue = oldJupUSDCValue.add(oldKaminoUSDCValue);
-        // const totalPreviousValue = new BN(96400000);
-        const yieldGenerated = new BN(totalCurrentValue).sub(totalPreviousValue); 
-        let accIncrement = new BN(0);
-        if (yieldGenerated.gt(new BN(0)) && previousVaultStates.totalShares.gt(new BN(0))) {
-        // if (yieldGenerated.gt(new BN(0)) && new BN(96400000).gt(new BN(0))) {
-          // Calculate acc_per_share increment:
-          accIncrement = yieldGenerated.mul(SCALER).div(new BN(previousVaultStates.totalShares));
-          // accIncrement = yieldGenerated.mul(SCALER).div(new BN(96400000));
-          console.log("Checking accIncrement : ", accIncrement.toString());
-        }
-
-        const accIncrementScaledDown = accIncrement.div(SCALE_DOWN);
-
-        // const newAccPerShare = new BN(previousVaultStates.accPerShare).add(accIncrement);
-        const newAccPerShare = new BN(previousVaultStates.accPerShare).add(accIncrementScaledDown);
-        console.log("Checking new AccPerShare : ", newAccPerShare.toString());
-
-        const updateVaultStatesTx = await program.methods
-        .syncVaultState(
-          newJupAllocation, // new_jup_allocation
-          newKaminoAllocation, // new_kamino_allocation
-          newJupAllocatedValue, // new_jup_lend_balance
-          newKaminoAllocatedValue, // new_kamino_balance
-          newAccPerShare, // new_acc_per_share
-          newTotalUnderlying, // new_total_underlying
-          newJupAllocatedValue, // new_jup_value
-          newKaminoAllocatedValue, // new_kamino_value
-        )
-        .accounts({
-          admin: admin.publicKey
-        })
-        .signers([admin])
-        .rpc();
-
-        console.log("Updated vault states : ", updateVaultStatesTx);
-
-      }else{
-        // Just perform lazy balancing
-
-        const currentVault = await program.account.vault.fetch(vaultPda);
-        // get vaultUsdcAta balance
-        const vaultUsdcBalanceDetails = await getAccount(
-          provider.connection,
-          vaultUsdcAta
-        );
-        const balance = new BN(vaultUsdcBalanceDetails.amount);
-
-        if (balance.eq(new BN(0))) {
-          console.log("No idle USDC in vault. Skipping lazy balancing.");
-          return;
-        }
-
-        // get current jup_allocation, kamino_allocation from vaultPda
-        const jupAllocation = currentVault.jupAllocation;
-        const kaminoAllocation = currentVault.kaminoAllocation;
-        const SCALE = 10_000; // % value
-
-        // calculate and split according to allocation for jup and kamino
-        const jupAmount = balance.mul(new BN(jupAllocation)).div(new BN(SCALE));
-        const kaminoAmount = balance
-          .mul(new BN(kaminoAllocation))
-          .div(new BN(SCALE));
-
-        // call deposit jup and deposit kamino instructions here using jupDeposit and kaminoDeposit functions
-        if (jupAmount.gt(new BN(0))) {
-          await jupDeposit(program, provider, jupAmount, { admin, usdcMint });
-        }
-        if (kaminoAmount.gt(new BN(0))) {
-          await kaminoDeposit(program, kaminoAmount, { admin, usdcMint });
-        }
-        // Update vault state for lazy balancing
-        const newJupLendBalance = new BN(currentVault.jupLendBalance).add(jupAmount);
-        const newKaminoBalance = new BN(currentVault.kaminoBalance).add(kaminoAmount);
-        const newTotalUnderlying = new BN(currentVault.totalUnderlying).add(balance);
-
-        const newJupValue = newJupLendBalance; 
-        const newKaminoValue = newKaminoBalance;
-
-        const updateVaultStatesTx = await program.methods
-          .syncVaultState(
-            jupAllocation, // new_jup_allocation (unchanged)
-            kaminoAllocation, // new_kamino_allocation (unchanged)
-            newJupLendBalance, // new_jup_lend_balance
-            newKaminoBalance, // new_kamino_balance
-            currentVault.accPerShare, // new_acc_per_share (unchanged)
-            newTotalUnderlying, // new_total_underlying
-            newJupValue, // new_jup_value
-            newKaminoValue // new_kamino_value
-          )
-          .accounts({
-            admin: admin.publicKey,
-          })
-          .signers([admin])
-          .rpc();
-
-        console.log(
-          "Lazy balancing completed, vault state updated:",
-          updateVaultStatesTx
-        );
-      }
-    }
-
+    const jupAmountInUSDC = await convertJupFTokenToUsdcAmount(jupFTokenMint, new BN(vaultJupAtaDetails.amount), provider.connection);
+    const kaminoAmountInUSDC = await convertKaminoTokenToUsdcAmount(new BN(vaultKaminoAtaDetails.amount), {usdcMint, admin : admin.publicKey, vaultPda});
     
+    expect(jupAmountInUSDC.sub(new BN(50_000_000)).abs().lte(new BN(100))).to.be.true
+    expect(kaminoAmountInUSDC.sub(new BN(50_000_000)).abs().lte(new BN(100))).to.be.true
+    
+    expect(jupAmountInUSDC.sub(kaminoAmountInUSDC).abs().lte(new BN(100_000_000)));
+
+    const vaultUSDCAtaDetails = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+    expect(new BN(vaultUSDCAtaDetails.amount).sub(new BN(100_000_000)).abs().lte(new BN(100)));
   })
 })
