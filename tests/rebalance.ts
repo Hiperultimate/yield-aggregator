@@ -25,6 +25,8 @@ import { Address } from "@solana/kit";
 import { invokeRebalance } from "../client_utility/invokeRebalance";
 
 const USDC_MINT_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"; // Mainnet
+const JUP_LEND_ADDRESS = "jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9"; // Mainnet
+const KLEND_PROGRAM_ID = new anchor.web3.PublicKey("KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD") as any;
 
 
 describe("Rebalacing tests", () => {
@@ -367,4 +369,68 @@ describe("Rebalacing tests", () => {
     expect(jupAmountInUSDC.sub(new BN(100_000_000)).abs().lte(new BN(500))).to.be.true
     expect(kaminoAmountInUSDC.sub(new BN(100_000_000)).abs().lte(new BN(500))).to.be.true
   })
+
+  // TODO : This test will instead be calling invokeClientWithdraw.ts function 
+  // Will be removing the withdraw.rs instruction
+  it("Withdraw USDC from vault", async () => {
+    // Get Jup withdraw context
+    const { getWithdrawContext } = await import("@jup-ag/lend/earn");
+    const jupWithdrawContext = await getWithdrawContext({
+      asset: usdcMint,
+      connection: provider.connection,
+      signer: admin.publicKey,
+    });
+
+    // Get Kamino accounts
+    const kaminoMainMarket = new anchor.web3.PublicKey(
+      "7u3HeHxYDLhnCoErrtycNokbQYbWGzLs6JSDqGAv5PfF"
+    );
+    const rpc = initRpc("http://localhost:8899");
+    const market = await KaminoMarket.load(
+      rpc as any,
+      kaminoMainMarket.toBase58() as Address,
+      DEFAULT_RECENT_SLOT_DURATION_MS
+    );
+    const reserve = market.getReserveByMint(usdcMint.toBase58() as Address);
+    const ixAccounts = await getDepositReserveLiquidityAccounts(
+      admin.publicKey,
+      reserve.address,
+      kaminoMainMarket.toBase58() as Address,
+      usdcMint.toBase58() as Address
+    );
+
+    const tx = await program.methods
+      .withdraw(new anchor.BN(10000000)) // 10 USDC
+      .accounts({
+        user: user.publicKey,
+        admin: admin.publicKey,
+        usdcMint: usdcMint,
+        fTokenMint: jupWithdrawContext.fTokenMint,
+        lendingAdmin: jupWithdrawContext.lendingAdmin,
+        lending: jupWithdrawContext.lending,
+        supplyTokenReservesLiquidity:
+          jupWithdrawContext.supplyTokenReservesLiquidity,
+        lendingSupplyPositionOnLiquidity:
+          jupWithdrawContext.lendingSupplyPositionOnLiquidity,
+        rateModel: jupWithdrawContext.rateModel,
+        vault: jupWithdrawContext.vault,
+        claimAccount: jupWithdrawContext.claimAccount,
+        liquidity: jupWithdrawContext.liquidity,
+        liquidityProgram: jupWithdrawContext.liquidityProgram,
+        rewardsRateModel: jupWithdrawContext.rewardsRateModel,
+        reserve: ixAccounts.reserve,
+        lendingMarket: ixAccounts.lendingMarket,
+        lendingMarketAuthority: ixAccounts.lendingMarketAuthority,
+        reserveLiquiditySupply: ixAccounts.reserveLiquiditySupply,
+        reserveCollateralMint: ixAccounts.reserveCollateralMint,
+        collateralTokenProgram: ixAccounts.collateralTokenProgram,
+        liquidityTokenProgram: ixAccounts.liquidityTokenProgram,
+        instructionSysvarAccount: ixAccounts.instructionSysvarAccount,
+        klendProgram: KLEND_PROGRAM_ID,
+      })
+      .signers([user])
+      .rpc({skipPreflight : true});
+
+    console.log("Withdraw transaction:", tx);
+  });
 })
