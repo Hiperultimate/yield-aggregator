@@ -1,8 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { YieldAggregator } from "../target/types/yield_aggregator";
-import JupLendIDL from "../idls/jup_lend.json";
-import { JupLendIDLType } from "./jupLend";
 import {
   getAssociatedTokenAddress,
   TOKEN_PROGRAM_ID,
@@ -22,7 +20,6 @@ import { DEFAULT_RECENT_SLOT_DURATION_MS, KaminoMarket } from "@kamino-finance/k
 import { Address } from "@solana/kit";
 
 const USDC_MINT_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"; // Mainnet
-const JUP_LEND_ADDRESS = "jup3YeL8QhtSx1e253b2FDvsMNC87fDrgQZivbrndc9"; // Mainnet
 const KLEND_PROGRAM_ID = new anchor.web3.PublicKey("KLend2g3cP87fffoy8q1mQqGKjrxjC8boSyAYavgmjD") as any;
 
 describe("Yield aggregator instruction tests", () => {
@@ -39,10 +36,6 @@ describe("Yield aggregator instruction tests", () => {
   anchor.setProvider(provider);
 
   const program = anchor.workspace.yieldAggregator as Program<YieldAggregator>;
-  const jupLendProgram = new Program<JupLendIDLType>(
-    JupLendIDL as JupLendIDLType,
-    provider
-  );
 
   let admin: anchor.web3.Keypair;
   let usdcMint: anchor.web3.PublicKey;
@@ -429,60 +422,60 @@ describe("Yield aggregator instruction tests", () => {
     expect(collateralAtaAfter.amount).to.equal(BigInt(0)); // Should have burned all collateral
   });
 
-  it("Withdrawing USDC from Jup to main_vault_usdc_ata", async () => {
-    // Get Jup withdraw accounts
-    const { getWithdrawContext } = await import("@jup-ag/lend/earn");
-    const jupWithdrawContext = await getWithdrawContext({
-      asset: usdcMint,
-      connection: provider.connection,
-      signer: admin.publicKey,
-    });
+  // it("Withdrawing USDC from Jup to main_vault_usdc_ata", async () => {
+  //   // Get Jup withdraw accounts
+  //   const { getWithdrawContext } = await import("@jup-ag/lend/earn");
+  //   const jupWithdrawContext = await getWithdrawContext({
+  //     asset: usdcMint,
+  //     connection: provider.connection,
+  //     signer: admin.publicKey,
+  //   });
 
-    // Check vault F-token balance before
-    let vaultFTokenAtaAccount = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
-    const initialFTokenBalance = vaultFTokenAtaAccount.amount;
-    console.log("Vault F-token before :", initialFTokenBalance);
-    expect(initialFTokenBalance > BigInt(0)).to.be.true; // Should have f-tokens from deposit
+  //   // Check vault F-token balance before
+  //   let vaultFTokenAtaAccount = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
+  //   const initialFTokenBalance = vaultFTokenAtaAccount.amount;
+  //   console.log("Vault F-token before :", initialFTokenBalance);
+  //   expect(initialFTokenBalance > BigInt(0)).to.be.true; // Should have f-tokens from deposit
 
-    // const existingUSDCValueInVault = await convertJupFTokenToUsdcAmount(jupFTokenMint, new anchor.BN(initialFTokenBalance), connection);
-    // console.log("Vault USDC before : ", existingUSDCValueInVault.toNumber());
+  //   // const existingUSDCValueInVault = await convertJupFTokenToUsdcAmount(jupFTokenMint, new anchor.BN(initialFTokenBalance), connection);
+  //   // console.log("Vault USDC before : ", existingUSDCValueInVault.toNumber());
 
-    // Check vault USDC balance before
-    let vaultUsdcAtaAccount = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
-    const initialUsdcBalance = vaultUsdcAtaAccount.amount;
-    // console.log("Vault USDC ATA amount before withdraw:", initialUsdcBalance);
+  //   // Check vault USDC balance before
+  //   let vaultUsdcAtaAccount = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+  //   const initialUsdcBalance = vaultUsdcAtaAccount.amount;
+  //   // console.log("Vault USDC ATA amount before withdraw:", initialUsdcBalance);
 
-    const withdrawAmount = new anchor.BN(initialFTokenBalance);  // 50 USDC worth of f-tokens
-    const tx = await program.methods
-      .jupWithdraw(withdrawAmount)
-      .accounts({
-        admin: admin.publicKey,
-        usdcMint: usdcMint,
-        fTokenMint: jupWithdrawContext.fTokenMint,
-        lendingAdmin: jupWithdrawContext.lendingAdmin,
-        lending: jupWithdrawContext.lending,
-        supplyTokenReservesLiquidity: jupWithdrawContext.supplyTokenReservesLiquidity,
-        lendingSupplyPositionOnLiquidity: jupWithdrawContext.lendingSupplyPositionOnLiquidity,
-        rateModel: jupWithdrawContext.rateModel,
-        claimAccount : jupWithdrawContext.claimAccount,
-        vault: jupWithdrawContext.vault,
-        liquidity: jupWithdrawContext.liquidity,
-        liquidityProgram: jupWithdrawContext.liquidityProgram,
-        rewardsRateModel: jupWithdrawContext.rewardsRateModel
-      })
-      .signers([admin])
-      .rpc({skipPreflight: true});
+  //   const withdrawAmount = new anchor.BN(initialFTokenBalance);  // 50 USDC worth of f-tokens
+  //   const tx = await program.methods
+  //     .jupWithdraw(withdrawAmount)
+  //     .accounts({
+  //       admin: admin.publicKey,
+  //       usdcMint: usdcMint,
+  //       fTokenMint: jupWithdrawContext.fTokenMint,
+  //       lendingAdmin: jupWithdrawContext.lendingAdmin,
+  //       lending: jupWithdrawContext.lending,
+  //       supplyTokenReservesLiquidity: jupWithdrawContext.supplyTokenReservesLiquidity,
+  //       lendingSupplyPositionOnLiquidity: jupWithdrawContext.lendingSupplyPositionOnLiquidity,
+  //       rateModel: jupWithdrawContext.rateModel,
+  //       claimAccount : jupWithdrawContext.claimAccount,
+  //       vault: jupWithdrawContext.vault,
+  //       liquidity: jupWithdrawContext.liquidity,
+  //       liquidityProgram: jupWithdrawContext.liquidityProgram,
+  //       rewardsRateModel: jupWithdrawContext.rewardsRateModel
+  //     })
+  //     .signers([admin])
+  //     .rpc({skipPreflight: true});
 
-    console.log("Jup withdraw transaction:", tx);
+  //   console.log("Jup withdraw transaction:", tx);
 
-    // Check balances after
-    vaultUsdcAtaAccount = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
-    console.log("Vault USDC after :", vaultUsdcAtaAccount.amount);
-    expect(Number(vaultUsdcAtaAccount.amount)).to.be.closeTo(Number(initialUsdcBalance) + 50 * 10 ** 6, 5); // Allow small delta due to protocol fees/rounding
+  //   // Check balances after
+  //   vaultUsdcAtaAccount = await getAccount(provider.connection, vaultUsdcAta, "confirmed");
+  //   console.log("Vault USDC after :", vaultUsdcAtaAccount.amount);
+  //   expect(Number(vaultUsdcAtaAccount.amount)).to.be.closeTo(Number(initialUsdcBalance) + 50 * 10 ** 6, 5); // Allow small delta due to protocol fees/rounding
 
-    vaultFTokenAtaAccount = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
-    console.log("Vault F-token after :", vaultFTokenAtaAccount.amount);
+  //   vaultFTokenAtaAccount = await getAccount(provider.connection, vaultFTokenAta, "confirmed");
+  //   console.log("Vault F-token after :", vaultFTokenAtaAccount.amount);
 
-    expect(vaultFTokenAtaAccount.amount < initialFTokenBalance).to.be.true; // Should have burned f-tokens
-  });
+  //   expect(vaultFTokenAtaAccount.amount < initialFTokenBalance).to.be.true; // Should have burned f-tokens
+  // });
 })

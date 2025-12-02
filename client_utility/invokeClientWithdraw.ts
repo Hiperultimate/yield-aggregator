@@ -156,7 +156,7 @@ export async function invokeClientWithdraw(
   const userPosition = await program.account.userPosition.fetch(userPositionAddress, "confirmed");
 
   const sharesToBurn = withdrawAmount.mul(vaultAccount.totalShares.div(vaultAccount.totalUnderlying));
-  // Continue from here 
+  // TODO : Continue from here 
   
   // const pendingScaled = userPosition.
 

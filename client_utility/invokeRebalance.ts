@@ -85,9 +85,6 @@ export async function invokeRebalance(
       updateVaultStates
     );
   } else {
-    // }
-    //   if(true){ // TODO: remove this line; this is for testing purposes only
-
     // n-th time allocation
     // Check if we need rebalacing
     //  check percent increase in both platforms
@@ -97,9 +94,6 @@ export async function invokeRebalance(
 
     const lastJupValue = previousVaultStates.lastJupValue;
     const lastKaminoValue = previousVaultStates.lastKaminoValue;
-    // TODO: Remove below values and uncomment above two lines
-    // const lastJupValue = new BN(48500000) // test values
-    // const lastKaminoValue = new BN(49700000) // test
 
     vaultJupAtaDetails = await getAccount(provider.connection, accounts.vaultFTokenAta); // Updating with the latest deposited amount
     vaultKaminoAtaDetails = await getAccount(
@@ -136,13 +130,13 @@ export async function invokeRebalance(
       // if increaseInJup > 100 i.e. increaseInJup > 1 % and so on...
     }
     console.log(
-      "Checking jup diff : ",
+      "Jup diff : ",
       oldJupUSDCValue.toString(),
       lastKaminoValue.toString(),
       jupDiff.toString()
     );
     console.log(
-      "Checking increase in jup percent value : ",
+      "Jup percent value : ",
       increaseInJup.toString()
     );
 
@@ -152,13 +146,13 @@ export async function invokeRebalance(
       increaseInKam = kamDiff.mul(new BN(10000)).div(lastKaminoValue);
     }
     console.log(
-      "Checking kam diff :",
+      "Kamino diff :",
       oldKaminoUSDCValue.toString(),
       lastKaminoValue.toString(),
       kamDiff.toString()
     );
     console.log(
-      "Checking increase in kamino percent value : ",
+      "Kamino percent value : ",
       increaseInKam.toString()
     );
 
@@ -169,7 +163,7 @@ export async function invokeRebalance(
 
     // We are performing lazy balancing separately here to save transaction costs
     if (getThresholdRequirement.needsRebalance === true) {
-      console.log("Checking threhshold function : ", getThresholdRequirement);
+      console.log("Threshold data : ", getThresholdRequirement);
       // add rebalancing logic here
       const newJupAllocation = getThresholdRequirement.JUP;
       const newKaminoAllocation = getThresholdRequirement.KAMINO;
@@ -210,7 +204,7 @@ export async function invokeRebalance(
       const totalUnderlyingValue = new BN(mainVaultUSDCAtaDetails.amount);
       const totalCurrentValue = mainVaultUSDCAtaDetails.amount;
       console.log(
-        "Checking main vault USDC amount  : ",
+        "Main vault USDC amount  : ",
         mainVaultUSDCAtaDetails.amount.toString()
       );
 
@@ -222,7 +216,7 @@ export async function invokeRebalance(
         .mul(new BN(newKaminoAllocation))
         .div(new BN(SCALE));
       console.log(
-        "Checking transfer balance before submission : ",
+        "Transfer balance before submission : ",
         newJupAllocatedValue.toString(),
         newKaminoAllocatedValue.toString()
       );
@@ -282,7 +276,7 @@ export async function invokeRebalance(
           .mul(SCALER)
           .div(new BN(previousVaultStates.totalShares));
         // accIncrement = yieldGenerated.mul(SCALER).div(new BN(96400000));
-        console.log("Checking accIncrement : ", accIncrement.toString());
+        console.log("AccIncrement : ", accIncrement.toString());
       }
 
       const accIncrementScaledDown = accIncrement.div(SCALE_DOWN);
